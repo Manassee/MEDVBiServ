@@ -2,6 +2,39 @@
 
 <PageTitle>Home</PageTitle>
 
-<h1>Hello, world!</h1>
+<h1>Willkommen zu MEDVBiServ</h1>
 
-Welcome to your new app.
+<MudContainer>
+    <MudGrid Class="mt-8">
+
+        <MudImage Src="images/mony.jpg" Alt="Mony the dog" Elevation="25" Class="rounded-lg mb-10" />
+        <MudCard Elevation="25" Class="rounded-lg pb-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h5" Align="Align.Center">Beginner</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <div class="d-flex justify-center">
+                        <MudText Typo="Typo.h3">$5</MudText>
+                        <MudText Typo="Typo.h5" Class="ml-1 mt-5" Color="Color.Secondary">/Monthly</MudText>
+                    </div>
+                </MudCardContent>
+        </MudCard>
+    </MudGrid>
+</MudContainer>
+
+@code{
+
+}
+
+style{
+
+    h1{
+        color: #2c3e50;
+        font-family: 'Roboto', sans-serif;
+        text-align: center;
+        margin-top: 20px;
+        margin-bottom: 20px;
+    }
+}
