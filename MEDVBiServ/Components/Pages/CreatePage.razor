@@ -1,0 +1,79 @@
+﻿@page "/createPage"
+@using MEDVBiServ.Components.Layout
+@layout SlideLayout
+
+<MudGrid Class="mt-4" GutterSize="3">
+    <MudItem xs="12" md="4" lg="4">
+
+        <!-- Sektion Sprache und Eingabe-->
+        <MudPaper Class="pa-6">
+
+            <MudText Typo="Typo.h6" Class="pa-4 mr-3"> Sprache und Eingabe</MudText>
+
+            <!-- Sprach auswahl-->
+            <MudItem Class="pa-4 mr-3 mb-4 mt-n1">
+                <MudSelect T="string" Label="Sprache auswählen">
+
+                </MudSelect>
+            </MudItem>
+
+            <!-- Buch eingabe --->
+            <MudTextField T="string" Label="Buch" Variant="Variant.Outlined" Class="pa-4 mr-3"></MudTextField>
+
+            <MudGrid Class="px-4 mb-8" GutterSize="2">
+                <!-- Kapitel eingabe-->
+                <MudItem xs="6">
+                    <MudTextField T="string" Label="Kapitel" Variant="Variant.Outlined" FullWidth="true" />
+                </MudItem>
+
+                <!-- Vers eingabe -->
+                <MudItem xs="6">
+                    <MudTextField T="string" Label="Vers" Variant="Variant.Outlined" FullWidth="true" />
+                </MudItem>
+            </MudGrid>
+
+            <!-- Button um Vers hinzuzufügen-->
+            <div class="vers-button">
+                <MudButton Class="vers-button-custom mt-4 mb-8" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Add">Vers hinzufügen</MudButton>
+            </div>
+
+
+        </MudPaper>
+
+    </MudItem>
+
+    <!-- Sektion Auswahl und Reihenfolge -->
+    <MudItem xs="12" md="3" lg="3">
+        <MudPaper Class="pa-6">
+            <MudText Typo="Typo.h6">Auswahl & Reihenfolge</MudText>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="4" lg="4">
+        <MudPaper Class="pa-6">
+            <MudText Typo="Typo.h6">Anmerkung</MudText>
+            <MudTextField T="string" Variant="Variant.Outlined"></MudTextField>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+
+@code {
+
+}
+
+<style>
+
+    /*Styling für Vers hinzufügen Button*/
+    .vers-button {
+        display: flex;
+        justify-content: center;
+        width: 100%;
+    }
+
+    .vers-button-custom {
+        background-color: rgb(12,128,223) !important;
+        color: white !important;
+    }
+</style>
+
