@@ -1,7 +1,7 @@
 # MEDVBiServ
 
 **MEDVBiServ** ist eine selbst entwickelte Anwendung zur Verwaltung und Bereitstellung von Bibelversen in mehreren Sprachen.  
-Das Projekt wurde im Rahmen meiner Ausbildung als Fachinformatiker für Anwendungsentwicklung entwickelt und dient als praktische Unterstützung für mein Kirchen-Media-Team sowie als Lern- und Übungsprojekt für moderne Softwarearchitekturen.
+Das Projekt dient als praktische Unterstützung für mein Kirchen-Media-Team sowie als Lern- und Übungsprojekt für moderne Softwarearchitekturen.
 
 ---
 
