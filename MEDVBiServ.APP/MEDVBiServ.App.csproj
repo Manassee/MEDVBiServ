@@ -7,12 +7,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Folder Include="Application\Interfaces\" />
-    <Folder Include="Application\Services\" />
-    <Folder Include="Controllers\" />
-  </ItemGroup>
-
-  <ItemGroup>
     <!-- EF Core RUNTIME -->
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.9" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.9" />

@@ -24,16 +24,16 @@ namespace MEDVBiServ.App.Infrastructure.DbFactories
             services.AddPooledDbContextFactory<TEn>(o => o.UseSqlite(csEn));
 
             // 2) Zusätzliche DbContext-REGISTRIERUNG (scoped) – nur damit AddDbContextCheck<> funktioniert
-            services.AddDbContext<TDe>(o => o.UseSqlite(csDe));
-            services.AddDbContext<TFr>(o => o.UseSqlite(csFr));
-            services.AddDbContext<TEn>(o => o.UseSqlite(csEn));
+            services.AddPooledDbContextFactory<TDe>(o => o.UseSqlite(csDe));
+            services.AddPooledDbContextFactory<TFr>(o => o.UseSqlite(csFr));
+            services.AddPooledDbContextFactory<TEn>(o => o.UseSqlite(csEn));
 
-            // 3) HealthChecks per AddDbContextCheck<TContext>()
             services.AddHealthChecks()
-                .AddDbContextCheck<TDe>("DE_Bible")
-                .AddDbContextCheck<TFr>("FR_Bible")
-                .AddDbContextCheck<TEn>("EN_Bible");
-           
+                .AddCheck<MEDVBiServ.App.Infrastructure.Health.DbFactoryHealthCheck<TDe>>("DE_Bible")
+                .AddCheck<MEDVBiServ.App.Infrastructure.Health.DbFactoryHealthCheck<TFr>>("FR_Bible")
+                .AddCheck<MEDVBiServ.App.Infrastructure.Health.DbFactoryHealthCheck<TEn>>("EN_Bible");
+
+
             return services;
 
             static string Require(string? v, string name) =>
