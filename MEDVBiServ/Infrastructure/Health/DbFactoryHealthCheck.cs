@@ -12,12 +12,12 @@ namespace MEDVBiServ.Infrastructure.Health
             => _factory = factory;
 
         public async Task<HealthCheckResult> CheckHealthAsync(
-            HealthCheckContext context, CancellationToken ct = default)
+            HealthCheckContext context, CancellationToken cancellationToken = default)
         {
             try
             {
-                await using var db = await _factory.CreateDbContextAsync(ct); // IAsyncDisposable ok
-                var ok = await db.Database.CanConnectAsync(ct);               // Database vorhanden
+                await using var db = await _factory.CreateDbContextAsync(cancellationToken); // IAsyncDisposable ok
+                var ok = await db.Database.CanConnectAsync(cancellationToken);               // Database vorhanden
                 return ok ? HealthCheckResult.Healthy() : HealthCheckResult.Unhealthy("CanConnect=false");
             }
             catch (Exception ex)

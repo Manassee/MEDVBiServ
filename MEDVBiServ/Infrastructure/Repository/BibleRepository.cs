@@ -3,6 +3,7 @@ using MEDVBiServ.Application.Dtos;
 using MEDVBiServ.Domain.Entities;
 using MEDVBiServ.Infrastructure.Repository.interfaces;
 using Microsoft.EntityFrameworkCore;
+using System.Text.RegularExpressions;
 
 namespace MEDVBiServ.Infrastructure.Repository
 {
@@ -160,33 +161,30 @@ namespace MEDVBiServ.Infrastructure.Repository
             throw new ArgumentException($"Ungültige Referenz: '{reference}'", nameof(reference));
         }
 
+
+        private static readonly Regex _simpleRefRx = new(
+            @"^\s*(?<book>\d+)(?:\s+(?<chapter>\d+)(?::(?<v1>\d+)(?:-(?<v2>\d+))?)?)?\s*$",
+            RegexOptions.Compiled,
+            matchTimeout: TimeSpan.FromMilliseconds(100));
+
+
         // sehr einfache, tolerante Parser-Hilfe
         private static bool TryParseSimple(string input, out int book, out int chapter, out int? v1, out int? v2)
         {
             book = chapter = 0; v1 = v2 = null;
             if (string.IsNullOrWhiteSpace(input)) return false;
 
-            // Erwartet ungefähr: "<book> <chapter>[:<v1>[-<v2>]]"
-            // Beispiel: "62 1:1-5"  (nutze vorher deine Map, um "1. Johannes" -> 62 zu machen)
-            var parts = input.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length < 1) return false;
+            var m = _simpleRefRx.Match(input);
+            if (!m.Success) return false;
 
-            // Wenn du hier schon eine Buchnummer übergeben willst, reicht das:
-            if (!int.TryParse(parts[0], out book)) return false;
+            // Pflichtfelder
+            if (!int.TryParse(m.Groups["book"].Value, out book)) return false;
+            if (m.Groups["chapter"].Success && !int.TryParse(m.Groups["chapter"].Value, out chapter)) return false;
 
-            if (parts.Length >= 2)
-            {
-                var rest = parts[1];
-                var chapAndVerses = rest.Split(':');
-                if (!int.TryParse(chapAndVerses[0], out chapter)) return false;
+            // Optionale Verse
+            if (m.Groups["v1"].Success && int.TryParse(m.Groups["v1"].Value, out var a)) v1 = a;
+            if (m.Groups["v2"].Success && int.TryParse(m.Groups["v2"].Value, out var b)) v2 = b;
 
-                if (chapAndVerses.Length == 2)
-                {
-                    var vr = chapAndVerses[1].Split('-', StringSplitOptions.RemoveEmptyEntries);
-                    if (vr.Length >= 1 && int.TryParse(vr[0], out var a)) v1 = a;
-                    if (vr.Length >= 2 && int.TryParse(vr[1], out var b)) v2 = b;
-                }
-            }
             return book > 0 && chapter > 0;
         }
     }

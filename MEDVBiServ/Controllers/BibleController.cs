@@ -18,8 +18,14 @@ namespace MEDVBiServ.Controllers
         [HttpGet("book/{book:int}/chapter/{chapter:int}")]
         public async Task<IActionResult> GetChapter(int book, int chapter, CancellationToken ct)
         {
+            
             var repo = _router.For(_lang.Resolve(HttpContext));
             var verses = await repo.GetChapterAsync(book, chapter, ct);
+
+            if (!ModelState.IsValid)
+            {
+               return BadRequest(ModelState);
+            }
             return Ok(verses);
         }
 

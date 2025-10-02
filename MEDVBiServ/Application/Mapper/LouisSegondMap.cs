@@ -101,7 +101,7 @@ namespace MEDVBiServ.Application.Mapper
         }
 
         private static string Normalize(string s)
-            => Regex.Replace(s.ToLowerInvariant(), @"[\s\.\-–—()'’]+", " ").Trim();
+            => Regex.Replace(s.ToLowerInvariant(), @"[\s\.\-–—()'’]+", " ",RegexOptions.None,TimeSpan.FromMilliseconds(100)).Trim();
 
         public static string GetName(int id) => ById.TryGetValue(id, out var b) ? b.Name : $"Livre {id}";
         public static string GetCode(int id) => ById.TryGetValue(id, out var b) ? b.Code : $"L{id}";
