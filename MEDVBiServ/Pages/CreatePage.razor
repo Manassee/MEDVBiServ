@@ -1,0 +1,61 @@
+﻿@page "/CreatePage"
+
+@layout OverviewLayout
+
+<div class="title-styling">
+    <h1>Folienübersicht</h1>
+</div>
+
+
+
+<MudContainer Class="mt-16 px-8" MaxWidth="MaxWidth.False">
+    <MudGrid>
+        <MudItem xs="12" sm="6" md="4">
+            <MudPaper Elevation="2" Class="pa-4" Style="height: 400px;">
+                <MudText Typo="Typo.h5">Sprache & Eingabe</MudText>
+                <MudText Class="mt-6">Sprache auswählen</MudText>
+                <!-- Sprache auswählen option -->
+                <MudSelect T="string" Variant="Variant.Outlined">
+
+                </MudSelect>
+                <MudText Class="mt-6">Buch</MudText>
+                <!-- Kapitel Auswahl-->
+                <div style="display: flex; gap: 16px;">
+                    <MudSelect T="string" Label="Kapitel" Variant="Variant.Outlined" Style="flex: 1;" />
+                    <MudSelect T="string" Label="Vers" Variant="Variant.Outlined" Style="flex: 1;" />
+                </div>
+               
+                <MudButton class="mt-6" Variant="Variant.Filled" Color="Color.Info" FullWidth>Vers hinzufügen</MudButton>
+
+
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4">
+            <MudPaper Elevation="2" Class="pa-4" Style="height: 400px;">
+                <MudText Typo=Typo.h5>Auswahl & Reihenfolge</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="12" md="4">
+            <MudPaper Elevation="2" Class="pa-4" Style="height: 400px;">
+                <MudText Typo=Typo.h5>Anmerkung hinzufügen</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="12">
+            <MudPaper Elevation="2" Class="pa-4" Style="height: 400px;">
+                <MudText Typo=Typo.h5>Vorschau (Reihenfolge)</MudText>
+            </MudPaper>
+        </MudItem>
+        
+    </MudGrid>
+</MudContainer>
+
+@code {
+
+}
+
+<style>
+
+    .title-styling{
+        margin: 2em;
+    }
+</style>
