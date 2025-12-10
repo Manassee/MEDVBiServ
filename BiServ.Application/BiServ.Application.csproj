@@ -11,8 +11,4 @@
     <PackageReference Include="Microsoft.AspNetCore.Routing" Version="2.3.0" />
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\BiServ.Domain\BiServ.Domain.csproj" />
-  </ItemGroup>
-
 </Project>
