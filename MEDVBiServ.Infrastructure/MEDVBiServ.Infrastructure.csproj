@@ -13,7 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\MEDVBiServ.Application\MEDVBiServ.Application.csproj" />
+    
     <ProjectReference Include="..\MEDVBiServ.Domain\MEDVBiServ.Domain.csproj" />
   </ItemGroup>
 

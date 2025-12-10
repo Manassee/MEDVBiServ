@@ -1,8 +1,8 @@
-﻿using MEDVBiServ.Application.Enums;
+﻿using MEDVBiServ.Application.Dtos;
+using MEDVBiServ.Application.Enums;
 using MEDVBiServ.Application.Interfaces;
-using Microsoft.Extensions.Primitives;
-using System;
-using System.Net.Http;
+using MEDVBiServ.Application.Mapper;
+using static MEDVBiServ.Application.Mapper.ElberfelderMap;
 
 namespace MEDVBiServ.Application.Services
 {
@@ -10,40 +10,59 @@ namespace MEDVBiServ.Application.Services
     {
         public Translation Resolve(string? routeLang, string? queryLang, string? headerLang)
         {
-            // 1) Route
-            if (Try(routeLang, out var t1)) return t1;
+            var lang = routeLang ?? queryLang ?? headerLang;
 
-            // 2) Query
-            if (Try(queryLang, out var t2)) return t2;
+            if (string.IsNullOrWhiteSpace(lang))
+                return Translation.De;
 
-            // 3) Header
-            if (!string.IsNullOrWhiteSpace(headerLang))
+            lang = lang.Trim().ToLowerInvariant();
+
+            return lang switch
             {
-                if (headerLang.StartsWith("fr", StringComparison.OrdinalIgnoreCase)) return Translation.Fr;
-                if (headerLang.StartsWith("de", StringComparison.OrdinalIgnoreCase)) return Translation.De;
-            }
-
-            return Translation.De;
+                "de" or "ger" or "german" => Translation.De,
+                "fr" or "fra" or "fre" or "french" => Translation.Fr,
+                _ => Translation.De
+            };
         }
 
-        private static bool Try(string? s, out Translation t)
-        {
-            switch (s?.Trim().ToLowerInvariant())
+        public string GetLanguageCode(Translation translation)
+            => translation switch
             {
-                case "de":
-                case "de-de":
-                case "ger":
-                    t = Translation.De; return true;
+                Translation.De => "de",
+                Translation.Fr => "fr",
+                _ => "de"
+            };
 
-                case "fr":
-                case "fr-fr":
-                case "fra":
-                    t = Translation.Fr; return true;
-            }
+        public string GetBookName(Translation translation, int bookNumber)
+            => translation switch
+            {
+                Translation.De => ElberfelderMap.GetName(bookNumber),
+                Translation.Fr => LouisSegondMap.GetName(bookNumber),
+                _ => ElberfelderMap.GetName(bookNumber)
+            };
 
-            t = Translation.De;
-            return false;
+        public IReadOnlyList<BookInfos> GetAllBooks(Translation translation)
+        {
+            // ElberfelderMap & LouisSegondMap liefern beide BookDef[]
+            IReadOnlyList<BookDef> src = translation switch
+            {
+                Translation.De => ElberfelderMap.GetAll(),
+                Translation.Fr => LouisSegondMap.GetAll(),
+                _ => ElberfelderMap.GetAll()
+            };
+
+            var list = src
+                .Select(b => new BookInfos
+                {
+                    Id = b.Id,
+                    Code = b.Code,
+                    Name = b.Name,
+                    Testament = b.T, // Korrigiert: Testament ist vom Typ Testament, nicht string
+                    // Chapters ggf. ergänzen, falls benötigt
+                })
+                .ToList();
+
+            return list;
         }
     }
-
 }
