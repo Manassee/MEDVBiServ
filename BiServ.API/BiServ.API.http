@@ -1,6 +1,0 @@
-@BiServ.API_HostAddress = http://localhost:5126
-
-GET {{BiServ.API_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###

@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 
-namespace BiServ.API.Controllers
+namespace MEDVBiServ.API.Controllers
 {
     [ApiController]
     [Route("[controller]")]
