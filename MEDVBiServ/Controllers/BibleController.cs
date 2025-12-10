@@ -1,10 +1,9 @@
-﻿using MEDVBiServ.Application.Interfaces;
-using MEDVBiServ.Infrastructure.Repository.interfaces;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
+
 
 namespace MEDVBiServ.Controllers
 {
-    public class BibleController : ControllerBase
+   /* public class BibleController : ControllerBase
     {
         private readonly IBibleRepositoryRouter _router;
         private readonly ILanguageProvider _lang;
@@ -36,5 +35,5 @@ namespace MEDVBiServ.Controllers
             var result = await repo.GetByReferenceAsync(reference, ct);
             return Ok(result);
         }
-    }
+    }*/
 }
