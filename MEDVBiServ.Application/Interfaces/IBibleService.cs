@@ -11,25 +11,25 @@ namespace MEDVBiServ.Application.Interfaces
 {
     public interface IBibleService
     {
-        // 1. Alle Bücher (z.B. BookInfosDto: Nummer + Name + Kapitelanzahl)
+        // Bücher-Liste (für Auswahl / Übersicht)
         Task<IReadOnlyList<BookInfos>> GetBooksAsync(Translation translation);
 
-        // 2. Alle Kapitel eines Buches (einfach nur Nummern)
+        // Alle Kapitel eines Buches
         Task<IReadOnlyList<int>> GetChaptersAsync(Translation translation, int bookNumber);
 
-        // 3. Alle Verse eines Kapitels
-        Task<IReadOnlyList<BookInfos>> GetVersesFromChapterAsync(
+        // Alle Verse eines Kapitels
+        Task<IReadOnlyList<VerseDto>> GetVersesFromChapterAsync(
             Translation translation, int bookNumber, int chapter);
 
-        // 4. Einzelner Vers
-        Task<BookInfos?> GetSingleVerseAsync(
+        // Einzelner Vers
+        Task<VerseDto?> GetSingleVerseAsync(
             Translation translation, int bookNumber, int chapter, int verseNumber);
 
-        // 5. Vers-Bereich (Range)
-        Task<IReadOnlyList<BookInfos>> GetVerseRangeAsync(
+        // Vers-Bereich (z.B. Vers 3–10)
+        Task<IReadOnlyList<VerseDto>> GetVerseRangeAsync(
             Translation translation, int bookNumber, int chapter, int fromVerse, int toVerse);
 
-        // Optional: per Id (z.B. für interne APIs / Paging)
-        Task<BookInfos?> GetVerseByIdAsync(Translation translation, int id);
+        // Vers per Id
+        Task<VerseDto?> GetVerseByIdAsync(Translation translation, int id);
     }
 }

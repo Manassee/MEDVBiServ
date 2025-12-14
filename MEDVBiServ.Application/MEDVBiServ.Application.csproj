@@ -4,6 +4,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <UserSecretsId>83634bce-f52b-4e54-9f45-9ed3f746307a</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,7 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MEDVBiServ.Domain\MEDVBiServ.Domain.csproj" />
-	<ProjectReference Include="..\MEDVBiServ.Infrastructure\MEDVBiServ.Infrastructure.csproj"/>
+	<ProjectReference Include="..\MEDVBiServ.Infrastructure\MEDVBiServ.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

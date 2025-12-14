@@ -1,10 +1,8 @@
 
 ﻿using Microsoft.AspNetCore.Mvc;
 
-﻿
-using BiServ.Infrastructure.Repository.interfaces;
-using MEDVBiServ.Application.Interfaces;
-using Microsoft.AspNetCore.Mvc;
+
+
 
 
 namespace MEDVBiServ.Controllers

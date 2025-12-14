@@ -1,15 +1,26 @@
+using MEDVBiServ.Application.Services;
+using MEDVBiServ.Infrastructure;
+using System.Text.Json.Serialization;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+builder.Services
+    .AddControllers()
+    .AddJsonOptions(o =>
+    {
+        o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
 
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+builder.Services.AddApplicationServices();
+builder.Services.AddInfrastructure(builder.Configuration);
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// Swagger nur in Development
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -21,5 +32,8 @@ app.UseHttpsRedirection();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Optional: Ping endpoint zum Testen
+app.MapGet("/ping", () => Results.Ok("API läuft!"));
 
 app.Run();
