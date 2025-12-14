@@ -1,50 +1,39 @@
-﻿using MEDVBiServ.Infrastructure.DbContext;
-using Microsoft.EntityFrameworkCore;
+using MEDVBiServ.Application.Services;
+using MEDVBiServ.Infrastructure;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ConnectionStrings
-var deCon = builder.Configuration.GetConnectionString("DE_Bible");
-var frCon = builder.Configuration.GetConnectionString("FR_Bible");
-var enCon = builder.Configuration.GetConnectionString("EN_Bible");
-
-// 1️⃣ DE-Datenbank
-builder.Services.AddDbContext<DEDbContext>(options =>
-    options.UseSqlite(deCon));
-
-// 2️⃣ FR-Datenbank
-builder.Services.AddDbContext<FRDbContext>(options =>
-    options.UseSqlite(frCon));
-
-// 3️⃣ EN-Datenbank
-builder.Services.AddDbContext<ENDbContext>(options =>
-    options.UseSqlite(enCon));
+builder.Services
+    .AddControllers()
+    .AddJsonOptions(o =>
+    {
+        o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
 
 builder.Services.AddControllers();
+builder.Services.AddApplicationServices();
+builder.Services.AddInfrastructure(builder.Configuration);
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowWasm",
-        policy =>
-        {
-            policy
-                .AllowAnyHeader()
-                .AllowAnyMethod()
-                .AllowAnyOrigin();
-        });
-});
-
 var app = builder.Build();
 
+// Swagger nur in Development
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
-app.UseCors("AllowWasm");
+app.UseHttpsRedirection();
+
+app.UseAuthorization();
 
 app.MapControllers();
+
+// Optional: Ping endpoint zum Testen
+app.MapGet("/ping", () => Results.Ok("API l�uft!"));
+
 app.Run();
