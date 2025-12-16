@@ -98,5 +98,44 @@ namespace MEDVBiServ.Infrastructure.Repository
                 .OrderBy(v => v.Verse)
                 .ToListAsync();
         }
+
+        public async Task<int> CountAsync(string language, CancellationToken ct = default)
+        {
+            return await GetDbSet(language).CountAsync(ct);
+        }
+
+        public async Task<List<Bible>> GetPagedAsync(string language, int page, int pageSize, CancellationToken ct = default)
+        {
+            var skip = (page - 1) * pageSize;
+
+            return await GetDbSet(language)
+                .AsNoTracking()
+                .OrderBy(v => v.Id)               
+                .Skip(skip)
+                .Take(pageSize)
+                .ToListAsync(ct);
+        }
+
+        public async Task<int> CountVersesInChapterAsync(int bookNumber, int chapter, string languageCode, CancellationToken ct = default)
+        {
+            return await GetDbSet(languageCode)
+                .AsNoTracking()
+                .CountAsync(v => v.Book == bookNumber && v.Chapter == chapter, ct);
+        }
+
+        // ✅ NEU: DB-seitiges Paging
+        public async Task<IReadOnlyList<Bible>> GetVersesFromChapterPagedAsync(
+            int bookNumber, int chapter, string languageCode, int page, int pageSize, CancellationToken ct = default)
+        {
+            var skip = (page - 1) * pageSize;
+
+            return await GetDbSet(languageCode)
+                .AsNoTracking()
+                .Where(v => v.Book == bookNumber && v.Chapter == chapter)
+                .OrderBy(v => v.Verse) // wichtige stabile Sortierung!
+                .Skip(skip)
+                .Take(pageSize)
+                .ToListAsync(ct);
+        }
     }
 }
