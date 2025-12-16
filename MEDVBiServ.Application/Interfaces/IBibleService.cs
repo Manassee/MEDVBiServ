@@ -1,6 +1,7 @@
 ﻿using MEDVBiServ.Application.Dtos;
 using MEDVBiServ.Application.Enums;
 using MEDVBiServ.Contracts.Dtos;
+using MEDVBiServ.Contracts.Requests;
 
 namespace MEDVBiServ.Application.Interfaces
 {
@@ -21,9 +22,10 @@ namespace MEDVBiServ.Application.Interfaces
 
         Task<VerseDto?> GetVerseByIdAsync(Translation translation, int id);
 
-        
+
         Task<PagedResultDto<VerseDto>> GetVersesPagedAsync(
-            Translation translation, int bookNumber, int chapter, int page, int pageSize,
-            CancellationToken ct = default);
+        GetBibleVersesRequest request,
+        CancellationToken ct = default);
+
     }
 }

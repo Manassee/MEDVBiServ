@@ -3,6 +3,8 @@ using MEDVBiServ.Application.Enums;
 using MEDVBiServ.Application.Interfaces;
 using MEDVBiServ.Application.Mapper;
 using MEDVBiServ.Contracts.Dtos;
+using MEDVBiServ.Contracts.Enums;
+using MEDVBiServ.Contracts.Requests;
 using MEDVBiServ.Infrastructure.Interfaces;
 
 namespace MEDVBiServ.Application.Services
@@ -17,6 +19,14 @@ namespace MEDVBiServ.Application.Services
             _repository = repository;
             _languageProvider = languageProvider;
         }
+
+        private static Translation MapToTranslation(LanguageCode lang) => lang switch
+        {
+            LanguageCode.De => Translation.De,
+            LanguageCode.Fr => Translation.Fr,
+            _ => Translation.De
+        };
+
 
         public async Task<IReadOnlyList<BookInfos>> GetBooksAsync(Translation translation)
         {
@@ -87,48 +97,62 @@ namespace MEDVBiServ.Application.Services
             return BibleVerseMapper.ToDto(entity, bookName);
         }
 
-        // ✅ Paging-Usecase (DB-seitig über Repository)
+        
+
         public async Task<PagedResultDto<VerseDto>> GetVersesPagedAsync(
-            Translation translation, int bookNumber, int chapter, int page, int pageSize,
-            CancellationToken ct = default)
+    GetBibleVersesRequest request,
+    CancellationToken ct = default)
         {
-            if (page < 1) page = 1;
-            if (pageSize < 1) pageSize = 1;
+            var page = request.Page < 1 ? 1 : request.Page;
+            var pageSize = request.PageSize < 1 ? 1 : request.PageSize;
 
             const int MaxPageSize = 200;
             if (pageSize > MaxPageSize) pageSize = MaxPageSize;
 
-            var languageCode = _languageProvider.GetLanguageCode(translation);
+            // ✅ Contracts.LanguageCode -> Application.Translation
+            var translation = MapToTranslation(request.Language);
 
-            var totalCount = await _repository.CountVersesInChapterAsync(bookNumber, chapter, languageCode, ct);
+            // ✅ jetzt passt es zum ILanguageProvider
+            var lang = _languageProvider.GetLanguageCode(translation);
 
-            if (totalCount == 0)
+            var sortBy = request.SortBy switch
             {
-                return new PagedResultDto<VerseDto>
-                {
-                    Items = [],
-                    Page = page,
-                    PageSize = pageSize,
-                    TotalCount = 0
-                };
-            }
+                VerseSortBy.Id => "Id",
+                VerseSortBy.Book => "Book",
+                VerseSortBy.Chapter => "Chapter",
+                VerseSortBy.Verse => "Verse",
+                _ => "Book"
+            };
 
-            var entities = await _repository.GetVersesFromChapterPagedAsync(
-                bookNumber, chapter, languageCode, page, pageSize, ct);
+            var total = await _repository.CountAsync(lang, request.BookNumber, request.Chapter, request.Search, ct);
 
-            var bookName = _languageProvider.GetBookName(translation, bookNumber);
+            var entities = total == 0
+                ? []
+                : await _repository.GetPagedAsync(
+                    lang,
+                    request.BookNumber,
+                    request.Chapter,
+                    request.Search,
+                    page,
+                    pageSize,
+                    sortBy,
+                    request.Desc,
+                    ct);
 
-            var items = entities
-                .Select(v => BibleVerseMapper.ToDto(v, bookName))
-                .ToList();
+            var items = entities.Select(v =>
+            {
+                var bookName = _languageProvider.GetBookName(translation, v.Book);
+                return BibleVerseMapper.ToDto(v, bookName);
+            }).ToList();
 
             return new PagedResultDto<VerseDto>
             {
                 Items = items,
                 Page = page,
                 PageSize = pageSize,
-                TotalCount = totalCount
+                TotalCount = total
             };
         }
+
     }
 }

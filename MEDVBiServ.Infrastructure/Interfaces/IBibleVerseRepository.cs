@@ -40,5 +40,18 @@ namespace MEDVBiServ.Infrastructure.Interfaces
         Task<IReadOnlyList<Bible>> GetVersesFromChapterPagedAsync(
             int bookNumber, int chapter, string languageCode, int page, int pageSize, CancellationToken ct = default);
 
+        Task<int> CountAsync(string languageCode, int? bookNumber, int? chapter, string? search, CancellationToken ct = default);
+
+        Task<IReadOnlyList<Bible>> GetPagedAsync(
+            string languageCode,
+            int? bookNumber,
+            int? chapter,
+            string? search,
+            int page,
+            int pageSize,
+            string sortBy,
+            bool desc,
+            CancellationToken ct = default);
+
     }
 }

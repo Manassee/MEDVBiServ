@@ -137,5 +137,68 @@ namespace MEDVBiServ.Infrastructure.Repository
                 .Take(pageSize)
                 .ToListAsync(ct);
         }
+
+        
+
+        private static IQueryable<Bible> ApplyFilters(
+            IQueryable<Bible> q,
+            int? bookNumber,
+            int? chapter,
+            string? search)
+        {
+            if (bookNumber.HasValue)
+                q = q.Where(v => v.Book == bookNumber.Value);
+
+            if (chapter.HasValue)
+                q = q.Where(v => v.Chapter == chapter.Value);
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var s = search.Trim();
+                q = q.Where(v => v.Text.Contains(s));
+                // SQLite: Contains -> LIKE, ok. (Case-Sensitivity hängt von Collation ab)
+            }
+
+            return q;
+        }
+
+        private static IQueryable<Bible> ApplySorting(IQueryable<Bible> q, string sortBy, bool desc)
+        {
+            // stabile Sortierung: immer Secondary Keys nutzen, damit Paging “stabil” bleibt
+            return (sortBy, desc) switch
+            {
+                ("Id", true) => q.OrderByDescending(v => v.Id),
+                ("Id", false) => q.OrderBy(v => v.Id),
+
+                ("Book", true) => q.OrderByDescending(v => v.Book).ThenByDescending(v => v.Chapter).ThenByDescending(v => v.Verse),
+                ("Book", false) => q.OrderBy(v => v.Book).ThenBy(v => v.Chapter).ThenBy(v => v.Verse),
+
+                ("Chapter", true) => q.OrderByDescending(v => v.Chapter).ThenByDescending(v => v.Verse).ThenByDescending(v => v.Id),
+                ("Chapter", false) => q.OrderBy(v => v.Chapter).ThenBy(v => v.Verse).ThenBy(v => v.Id),
+
+                ("Verse", true) => q.OrderByDescending(v => v.Verse).ThenByDescending(v => v.Id),
+                ("Verse", false) => q.OrderBy(v => v.Verse).ThenBy(v => v.Id),
+
+                _ => q.OrderBy(v => v.Book).ThenBy(v => v.Chapter).ThenBy(v => v.Verse) // Default
+            };
+        }
+
+        public async Task<int> CountAsync(string languageCode, int? bookNumber, int? chapter, string? search, CancellationToken ct = default)
+        {
+            var q = Query(languageCode);
+            q = ApplyFilters(q, bookNumber, chapter, search);
+            return await q.CountAsync(ct);
+        }
+
+        public async Task<IReadOnlyList<Bible>> GetPagedAsync(string languageCode, int? bookNumber, int? chapter, string? search, int page, int pageSize, string sortBy, bool desc, CancellationToken ct = default)
+        {
+            var skip = (page - 1) * pageSize;
+
+            var q = Query(languageCode);
+            q = ApplyFilters(q, bookNumber, chapter, search);
+            q = ApplySorting(q, sortBy, desc);
+
+            return await q.Skip(skip).Take(pageSize).ToListAsync(ct);
+        }
     }
 }

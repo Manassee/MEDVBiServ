@@ -1,5 +1,9 @@
-﻿using MEDVBiServ.Application.Enums;
+﻿using MEDVBiServ.Application.Dtos;
+using MEDVBiServ.Application.Enums;
 using MEDVBiServ.Application.Interfaces;
+using MEDVBiServ.Contracts.Requests;
+using MEDVBiServ.Contracts.Enums;
+using MEDVBiServ.Contracts.Dtos;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MEDVBiServ.API.Controllers
@@ -109,5 +113,32 @@ namespace MEDVBiServ.API.Controllers
             var verse = await _service.GetVerseByIdAsync(translation, id);
             return verse is null ? NotFound() : Ok(verse);
         }
+
+        [HttpGet("verses/paged")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<ActionResult<PagedResultDto<VerseDto>>> GetVersesPaged(
+    [FromQuery] GetBibleVersesRequest request,
+    CancellationToken ct = default)
+        {
+            // Grundvalidierung (optional, aber sinnvoll)
+            if (request.Page < 1)
+                return BadRequest("page muss >= 1 sein.");
+
+            if (request.PageSize < 1)
+                return BadRequest("pageSize muss >= 1 sein.");
+
+            // Wenn du Buch/Kapitel optional machen willst: NICHT prüfen.
+            // Wenn du Buch/Kapitel verpflichtend willst, dann so:
+            // if (request.BookNumber is null || request.BookNumber <= 0)
+            //     return BadRequest("bookNumber muss gesetzt und > 0 sein.");
+            // if (request.Chapter is null || request.Chapter <= 0)
+            //     return BadRequest("chapter muss gesetzt und > 0 sein.");
+
+            var result = await _service.GetVersesPagedAsync(request, ct);
+            return Ok(result);
+        }
+
+
     }
 }
