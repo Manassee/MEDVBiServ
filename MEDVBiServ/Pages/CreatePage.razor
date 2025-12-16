@@ -2,6 +2,10 @@
 
 @layout OverviewLayout
 
+@inject IJSRuntime JS
+@using MEDVBiServ.Services
+@inject SlideService SlideService
+
 <div class="title-styling">
     <h1>Folienübersicht</h1>
 </div>
@@ -10,6 +14,7 @@
 
 <MudContainer Class="mt-16 px-8" MaxWidth="MaxWidth.False">
     <MudGrid>
+        <!-- 1. interface-->
         <MudItem xs="12" sm="6" md="4">
             <MudPaper Elevation="2" Class="pa-4" Style="height: 400px;">
                 <MudText Typo="Typo.h5">Sprache & Eingabe</MudText>
@@ -30,19 +35,103 @@
 
             </MudPaper>
         </MudItem>
+
+        <!-- 2. interface-->
         <MudItem xs="12" sm="6" md="4">
             <MudPaper Elevation="2" Class="pa-4" Style="height: 400px;">
-                <MudText Typo=Typo.h5>Auswahl & Reihenfolge</MudText>
+                <MudText Typo="Typo.h5">Auswahl & Reihenfolge</MudText>
+                <div class="scrollable-list">
+                    @foreach (var item in SelectedItems)
+                    {
+                        <MudPaper Class="pa-3 mb-2" Style="border-radius: 12px; background-color: #f8f8f8;">
+                            <div class="d-flex justify-between align-center">
+                                <div>
+                                    <MudText Typo="Typo.subtitle1"><strong>@item.Display</strong></MudText>
+                                    @if (!string.IsNullOrWhiteSpace(item.Text))
+                                    {
+                                        <MudText Typo="Typo.body2">@item.Text</MudText>
+                                    }
+                                </div>
+                                <div>
+                                    <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward"
+                                                   Disabled="@(item == SelectedItems.First())"
+                                                   OnClick="@(() => MoveUp(item))"
+                                                   Color="Color.Primary" />
+                                    <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward"
+                                                   Disabled="@(item == SelectedItems.Last())"
+                                                   OnClick="@(() => MoveDown(item))"
+                                                   Color="Color.Primary" />
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                   OnClick="@(() => RemoveItem(item))"
+                                                   Color="Color.Error" />
+                                </div>
+                            </div>
+                        </MudPaper>
+                    }
+                </div>
             </MudPaper>
         </MudItem>
+
+        <!-- 3. Interface-->
         <MudItem xs="12" sm="12" md="4">
             <MudPaper Elevation="2" Class="pa-4" Style="height: 400px;">
                 <MudText Typo=Typo.h5>Anmerkung hinzufügen</MudText>
+
+                <!-- Textfeld -->
+                <MudTextField T="string"
+                              Label="Deine Anmerkung..."
+                              Variant="Variant.Outlined"
+                              @bind-Value="NewAnnotation"
+                              Lines="4"
+                              FullWidth="true"
+                              TextAlign="TextAlign.Start"
+                              Class="mb-3" />
+
+                <!-- Speichern-Button -->
+                <div class="d-flex justify-center">
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Primary"
+                               
+                               OnClick="SaveAnnotation">
+                        ➕ Anmerkung speichern
+                    </MudButton>
+                </div>
+
             </MudPaper>
         </MudItem>
+
+        <!-- 4. Interface-->
         <MudItem xs="12" sm="6" md="12">
             <MudPaper Elevation="2" Class="pa-4" Style="height: 400px;">
                 <MudText Typo=Typo.h5>Vorschau (Reihenfolge)</MudText>
+
+                <ol class="pl-4">
+                    @foreach (var item in SelectedItems)
+                    {
+                        <li class="mb-3">
+                            @if (item.Type == "verse")
+                            {
+                                <div>
+                                    <strong>@item.Display</strong><br />
+                                    <em>@item.Text</em>
+                                </div>
+                            }
+                            else if (item.Type == "annotation")
+                            {
+                                <div>
+                                    <strong>@item.Display</strong>
+                                </div>
+                            }
+                        </li>
+                    }
+                </ol>
+
+                <div class="d-flex justify-center mt-4">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="OpenPresentation">
+                        🚀 Folien generieren
+                    </MudButton>
+                </div>
+
             </MudPaper>
         </MudItem>
         
@@ -51,6 +140,85 @@
 
 @code {
 
+
+
+    [Inject] private NavigationManager Nav { get; set; }
+
+    public class SlideItem
+    {
+        public string Type { get; set; } = "verse"; // "verse" oder "annotation"
+        public string Display { get; set; } = string.Empty; // z. B. "Johannes 3:16"
+        public string Text { get; set; } = string.Empty; // z. B. "Denn so sehr hat Gott..."
+    }
+
+    // Die Liste, die du im Vorschau-Bereich anzeigen möchtest
+    private List<SlideItem> SelectedItems = new()
+    {
+        new SlideItem { Type = "verse", Display = "3. Mose 17:11", Text = "Ein Gott an bis tul stren." },
+        new SlideItem { Type = "verse", Display = "Philipper 4:13", Text = "Mach am elgense dlich." },
+        new SlideItem { Type = "verse", Display = "Markus 11:24", Text = "Ich sag mit dir drenan." }
+    };
+
+    
+
+    private string NewAnnotation = string.Empty;
+
+    
+
+    private void SaveAnnotation()
+    {
+        if (!string.IsNullOrWhiteSpace(NewAnnotation))
+        {
+            // Füge neue Anmerkung zur Liste hinzu
+            SelectedItems.Add(new SlideItem
+            {
+                Type = "annotation",
+                Display = NewAnnotation,
+                Text = string.Empty // optional
+            });
+
+            // Leere das Eingabefeld
+            NewAnnotation = string.Empty;
+
+            StateHasChanged();
+        }
+    }
+
+
+    private void MoveUp(SlideItem item)
+    {
+        var index = SelectedItems.IndexOf(item);
+        if (index > 0)
+        {
+            SelectedItems.RemoveAt(index);
+            SelectedItems.Insert(index - 1, item);
+            StateHasChanged();
+        }
+    }
+
+    private void MoveDown(SlideItem item)
+    {
+        var index = SelectedItems.IndexOf(item);
+        if (index < SelectedItems.Count - 1)
+        {
+            SelectedItems.RemoveAt(index);
+            SelectedItems.Insert(index + 1, item);
+            StateHasChanged();
+        }
+    }
+
+    private void RemoveItem(SlideItem item)
+    {
+        SelectedItems.Remove(item);
+        StateHasChanged();
+    }
+
+    private void OpenPresentation()
+    {
+        SlideService.Slides = SelectedItems.ToList(); // Daten übergeben
+        var url = Nav.ToAbsoluteUri("/present");
+        JS.InvokeVoidAsync("window.open", url.ToString(), "_blank");
+    }
 }
 
 <style>
@@ -58,4 +226,20 @@
     .title-styling{
         margin: 2em;
     }
+
+    .scrollable-list {
+        max-height: 300px;
+        overflow-y: auto;
+        padding-right: 6px; /* optional, für sichtbare Scrollbar */
+    }
+
+        /* Optional: Scrollbar Styling (nur für Desktop sichtbar) */
+        .scrollable-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .scrollable-list::-webkit-scrollbar-thumb {
+            background-color: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+        }
 </style>

@@ -1,6 +1,8 @@
+using MEDVBiServ.Services;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using MudBlazor.Services;
+using static MEDVBiServ.Pages.CreatePage;
 
 namespace MEDVBiServ
 {
@@ -12,6 +14,8 @@ namespace MEDVBiServ
 
             builder.RootComponents.Add<App>("#app");
             builder.RootComponents.Add<HeadOutlet>("head::after");
+            builder.Services.AddSingleton<SlideService>();
+
 
             // MudBlazor
             builder.Services.AddMudServices();
