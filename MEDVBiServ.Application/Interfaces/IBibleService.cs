@@ -7,7 +7,7 @@ namespace MEDVBiServ.Application.Interfaces
 {
     public interface IBibleService
     {
-        Task<IReadOnlyList<BookInfos>> GetBooksAsync(Translation translation);
+        Task<IReadOnlyList<Dtos.BookInfos>> GetBooksAsync(Translation translation);
 
         Task<IReadOnlyList<int>> GetChaptersAsync(Translation translation, int bookNumber);
 

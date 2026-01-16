@@ -10,9 +10,10 @@ namespace MEDVBiServ.Contracts.Dtos
     {
         public int Id { get; set; }
         public string Book { get; set; } = string.Empty;
+        public string BookName { get; set; } = "";  // für Anzeige: "Matthäus", "Jean", ...
         public int Chapter { get; set; }
         public int Verse { get; set; }
         public string Text { get; set; } = string.Empty;
-        public string Langu { get; init; } = string.Empty;
+        public string Lang { get; init; } = string.Empty;
     }
 }

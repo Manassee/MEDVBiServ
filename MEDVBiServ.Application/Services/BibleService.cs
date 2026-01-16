@@ -28,13 +28,13 @@ namespace MEDVBiServ.Application.Services
         };
 
 
-        public async Task<IReadOnlyList<BookInfos>> GetBooksAsync(Translation translation)
+        public async Task<IReadOnlyList<Dtos.BookInfos>> GetBooksAsync(Translation translation)
         {
             var languageCode = _languageProvider.GetLanguageCode(translation); // "de" / "fr"
             var bookNumbers = await _repository.GetAllBooksAsync(languageCode);
 
             return bookNumbers
-                .Select(bookNumber => new BookInfos
+                .Select(bookNumber => new Dtos.BookInfos
                 {
                     Id = bookNumber,
                     Name = _languageProvider.GetBookName(translation, bookNumber),

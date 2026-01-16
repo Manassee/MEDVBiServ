@@ -1,4 +1,4 @@
-using MEDVBiServ.Application.Services;
+﻿using MEDVBiServ.Application.Services;
 using MEDVBiServ.Infrastructure;
 using System.Text.Json.Serialization;
 
@@ -11,16 +11,23 @@ builder.Services
         o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
     });
 
-builder.Services.AddControllers();
 builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructure(builder.Configuration);
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// ✅ CORS
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("wasm-ui", policy =>
+        policy.AllowAnyOrigin()
+              .AllowAnyHeader()
+              .AllowAnyMethod());
+});
+
 var app = builder.Build();
 
-// Swagger nur in Development
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -29,11 +36,12 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+// ✅ CORS muss VOR MapControllers kommen
+app.UseCors("wasm-ui");
+
 app.UseAuthorization();
 
 app.MapControllers();
-
-// Optional: Ping endpoint zum Testen
-app.MapGet("/ping", () => Results.Ok("API l�uft!"));
+app.MapGet("/ping", () => Results.Ok("API läuft!"));
 
 app.Run();

@@ -32,4 +32,8 @@
     <Folder Include="Models\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\MEDVBiServ.Contracts\MEDVBiServ.Contracts.csproj" />
+  </ItemGroup>
+
 </Project>
