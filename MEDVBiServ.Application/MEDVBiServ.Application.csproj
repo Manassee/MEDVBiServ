@@ -19,6 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\MEDVBiServ.Contracts\MEDVBiServ.Contracts.csproj" />
     <ProjectReference Include="..\MEDVBiServ.Domain\MEDVBiServ.Domain.csproj" />
 	<ProjectReference Include="..\MEDVBiServ.Infrastructure\MEDVBiServ.Infrastructure.csproj" />
   </ItemGroup>

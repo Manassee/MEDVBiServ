@@ -30,5 +30,28 @@ namespace MEDVBiServ.Infrastructure.Interfaces
         // 5. Vers-Bereich (z. B. 3–10)
         Task<List<Bible>> GetVerseRangeAsync(
             int bookNumber, int chapter, int fromVerse, int toVerse, string language);
+
+        Task<int> CountAsync(string language, CancellationToken ct = default);
+
+        Task<List<Bible>> GetPagedAsync(string language, int page, int pageSize, CancellationToken ct = default);
+
+        Task<int> CountVersesInChapterAsync(int bookNumber, int chapter, string languageCode, CancellationToken ct = default);
+
+        Task<IReadOnlyList<Bible>> GetVersesFromChapterPagedAsync(
+            int bookNumber, int chapter, string languageCode, int page, int pageSize, CancellationToken ct = default);
+
+        Task<int> CountAsync(string languageCode, int? bookNumber, int? chapter, string? search, CancellationToken ct = default);
+
+        Task<IReadOnlyList<Bible>> GetPagedAsync(
+            string languageCode,
+            int? bookNumber,
+            int? chapter,
+            string? search,
+            int page,
+            int pageSize,
+            string sortBy,
+            bool desc,
+            CancellationToken ct = default);
+
     }
 }
