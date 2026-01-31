@@ -9,7 +9,7 @@ namespace MEDVBiServ.Contracts.Dtos
     public sealed class BibleVerseDto
     {
         public int Id { get; set; }
-        public string Book { get; set; } = string.Empty;
+        public int Book { get; set; } 
         public string BookName { get; set; } = "";  // für Anzeige: "Matthäus", "Jean", ...
         public int Chapter { get; set; }
         public int Verse { get; set; }

@@ -1,0 +1,126 @@
+﻿@page "/screen"
+@layout PresentationLayout
+@inject IJSRuntime JS
+
+<div class="screen-root" @onclick="ToggleFullscreen">
+    @if (Slides.Count == 0)
+    {
+        <div class="screen-empty">Warte auf Presenter…</div>
+    }
+    else
+    {
+        var s = Slides[SafeIndex];
+        <div class="screen-content">
+            <div class="screen-title">@s.Display</div>
+            @if (!string.IsNullOrWhiteSpace(s.Text))
+            {
+                <div class="screen-text">@s.Text</div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    public class SlideItem
+    {
+        public string Type { get; set; } = "verse";
+        public string Display { get; set; } = string.Empty;
+        public string Text { get; set; } = string.Empty;
+    }
+
+    private List<SlideItem> Slides = new();
+    private int CurrentIndex = 0;
+
+    private DotNetObjectReference<Screen>? _dotNetRef;
+    private int SafeIndex => Slides.Count == 0 ? 0 : Math.Clamp(CurrentIndex, 0, Slides.Count - 1);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // Slides aus localStorage laden (wie Presenter)
+        Slides = await LoadSlidesFromLocalStorageAsync();
+
+        // Screen registrieren, damit JS STATE an uns weiterreichen kann
+        _dotNetRef = DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync("medvPresenter.registerScreen", _dotNetRef);
+
+        // sofort State anfragen
+        await JS.InvokeVoidAsync("medvPresenter.requestState");
+
+        StateHasChanged();
+    }
+
+    private async Task<List<SlideItem>> LoadSlidesFromLocalStorageAsync()
+    {
+        try
+        {
+            var json = await JS.InvokeAsync<string>("localStorage.getItem", "slides");
+            if (string.IsNullOrWhiteSpace(json)) return new List<SlideItem>();
+            return System.Text.Json.JsonSerializer.Deserialize<List<SlideItem>>(json) ?? new List<SlideItem>();
+        }
+        catch
+        {
+            return new List<SlideItem>();
+        }
+    }
+
+    [JSInvokable]
+    public Task OnState(string payloadJson)
+    {
+        // payloadJson enthält: {"currentIndex":x,"total":y}
+        var state = System.Text.Json.JsonSerializer.Deserialize<PresenterState>(payloadJson);
+        if (state is null) return Task.CompletedTask;
+
+        CurrentIndex = state.currentIndex;
+
+        InvokeAsync(StateHasChanged);
+        return Task.CompletedTask;
+    }
+
+    private async Task ToggleFullscreen()
+        => await JS.InvokeVoidAsync("medvPresenter.toggleFullscreen");
+
+    private class PresenterState
+    {
+        public int currentIndex { get; set; }
+        public int total { get; set; }
+    }
+
+    public void Dispose()
+    {
+        _dotNetRef?.Dispose();
+    }
+}
+
+<style>
+    .screen-root {
+        height: 100vh;
+        width: 100vw;
+        background: #0b0d12;
+        color: white;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        padding: 48px;
+    }
+
+    .screen-content {
+        max-width: 1200px;
+    }
+
+    .title {
+        font-size: clamp(2.2rem, 4vw, 4.6rem);
+        font-weight: 900;
+        margin-bottom: 20px;
+        line-height: 1.1;
+    }
+
+    .text {
+        font-size: clamp(1.5rem, 2.4vw, 2.7rem);
+        line-height: 1.45;
+        white-space: pre-wrap;
+        opacity: 0.96;
+    }
+</style>

@@ -48,7 +48,9 @@
                     }
                 </MudSelect>
 
+                <!-----------------------  Kapitel / Vers Auswahl  ----------------------------------------------------------------->
                 <div class="mt-4" style="display: flex; gap: 16px;">
+
                     <MudSelect T="int?"
                                Label="Kapitel"
                                Variant="Variant.Outlined"
@@ -63,47 +65,45 @@
                         }
                     </MudSelect>
 
+                    <!-----------------------  AnfangsVers  ----------------------------------------------------------------->
                     <MudSelect T="int?"
                                Label="Vers"
                                Variant="Variant.Outlined"
                                Dense="true"
                                Style="flex: 1;"
-                               Value="SelectedVerse"
-                               ValueChanged="@(v => SelectedVerse = v)"
+                               Value="SelectedVerseFrom"
+                               ValueChanged="@(v => OnVerseFromChanged(v))"
                                Disabled="@(SelectedBook is null || !SelectedChapter.HasValue)">
                         @foreach (var v in VerseNumbers)
                         {
                             <MudSelectItem Value="@((int?)v)" @key="v">@v</MudSelectItem>
                         }
                     </MudSelect>
+
+                    <!-----------------------  EndVers (optional)  ----------------------------------------------------------------->
+                    <MudSelect T="int?"
+                               Label="Vers"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               Style="flex: 1;"
+                               Value="SelectedVerseTo"
+                               ValueChanged="@(v => SelectedVerseTo = v)"
+                               Disabled="@(SelectedBook is null || !SelectedChapter.HasValue)">
+                        @foreach (var v in VerseNumbers)
+                        {
+                            <MudSelectItem Value="@((int?)v)" @key="v">@v</MudSelectItem>
+                        }
+                    </MudSelect>
+
                 </div>
 
                 <MudButton Class="mt-6"
                            Variant="Variant.Filled"
                            Color="Color.Info"
                            FullWidth
-                           Disabled="@(!CanAddSingleVerse)"
-                           OnClick="AddSingleVerseAsync">
+                           Disabled="@(!CanAddVerse)"
+                           OnClick="AddSelectedVerseOrRangeAsync">
                     Vers hinzufügen
-                </MudButton>
-
-                <MudDivider Class="my-4" />
-
-                <MudText Typo="Typo.subtitle2">Multi-Vers (z.B. 16-18 oder 16,18,21)</MudText>
-                <MudTextField T="string"
-                              Variant="Variant.Outlined"
-                              Dense="true"
-                              Placeholder="z.B. 16-18"
-                              @bind-Value="MultiVerseInput"
-                              Disabled="@(SelectedBook is null || !SelectedChapter.HasValue)" />
-
-                <MudButton Class="mt-3"
-                           Variant="Variant.Outlined"
-                           Color="Color.Primary"
-                           FullWidth
-                           Disabled="@(!CanAddMultiVerses)"
-                           OnClick="AddMultiVersesAsync">
-                    Multi-Vers hinzufügen
                 </MudButton>
 
                 <MudText Typo="Typo.caption" Class="mt-2">
@@ -128,31 +128,45 @@
                     {
                         @foreach (var item in SelectedItems)
                         {
-                            <MudPaper Class="pa-3 mb-2" Style="border-radius: 12px; background-color: #f8f8f8;">
-                                <div class="d-flex justify-between align-center">
-                                    <div style="max-width: 75%;">
-                                        <MudText Typo="Typo.subtitle1"><strong>@item.Display</strong></MudText>
+                            <MudPaper Class="pa-3 mb-2 fixed-item">
+                                <div class="item-content">
+
+                                    <div class="item-text">
+                                        <MudText Typo="Typo.subtitle1">
+                                            <strong>@item.Display</strong>
+                                        </MudText>
+
                                         @if (!string.IsNullOrWhiteSpace(item.Text))
                                         {
-                                            <MudText Typo="Typo.body2">@item.Text</MudText>
+                                            <MudText Typo="Typo.body2" Class="body-text">
+                                                @item.Text
+                                            </MudText>
                                         }
                                     </div>
 
-                                    <div>
-                                        <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward"
+                                    <div class="item-actions">
+                                        <MudIconButton Size="Size.Small"
+                                                       Icon="@Icons.Material.Filled.ArrowUpward"
                                                        Disabled="@(item == SelectedItems.First())"
                                                        OnClick="@(() => MoveUp(item))"
                                                        Color="Color.Primary" />
-                                        <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward"
+
+                                        <MudIconButton Size="Size.Small"
+                                                       Icon="@Icons.Material.Filled.ArrowDownward"
                                                        Disabled="@(item == SelectedItems.Last())"
                                                        OnClick="@(() => MoveDown(item))"
                                                        Color="Color.Primary" />
-                                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+
+                                        <MudIconButton Size="Size.Small"
+                                                       Icon="@Icons.Material.Filled.Delete"
                                                        OnClick="@(() => RemoveItem(item))"
                                                        Color="Color.Error" />
                                     </div>
+
+
                                 </div>
                             </MudPaper>
+
                         }
                     }
                 </div>
@@ -185,35 +199,36 @@
 
         <!-- 4. Panel -->
         <MudItem xs="12" sm="6" md="12">
-            <MudPaper Elevation="2" Class="pa-4" Style="height: 420px;">
+            <MudPaper Elevation="2" Class="pa-4" Style="height: 400px;">
                 <MudText Typo="Typo.h5">Vorschau (Reihenfolge)</MudText>
-
-                <ol class="pl-4 mt-3">
-                    @foreach (var item in SelectedItems)
-                    {
-                        <li class="mb-3">
-                            @if (item.Type == "verse")
-                            {
-                                <div>
-                                    <strong>@item.Display</strong><br />
-                                    <em>@item.Text</em>
-                                </div>
-                            }
-                            else if (item.Type == "annotation")
-                            {
-                                <div>
-                                    <strong>@item.Display</strong>
-                                </div>
-                            }
-                        </li>
-                    }
-                </ol>
+                <div class="scrollable-list mt-3">
+                    <ol class="pl-4">
+                        @foreach (var item in SelectedItems)
+                        {
+                            <li class="mb-3">
+                                @if (item.Type == "verse")
+                                {
+                                    <div>
+                                        <strong>@item.Display</strong><br />
+                                        <em>@item.Text</em>
+                                    </div>
+                                }
+                                else if (item.Type == "annotation")
+                                {
+                                    <div>
+                                        <strong>@item.Display</strong>
+                                    </div>
+                                }
+                            </li>
+                        }
+                    </ol>
+                </div>
+                
 
                 <div class="d-flex justify-center mt-4">
                     <MudButton Variant="Variant.Filled"
                                Color="Color.Primary"
                                StartIcon="@Icons.Material.Filled.PlayArrow"
-                               Disabled="@(SelectedItems.Count == 0)"
                                OnClick="OpenPresentation">
                         🚀 Folien generieren
                     </MudButton>
@@ -230,9 +245,9 @@
 
     public class SlideItem
     {
-        public string Type { get; set; } = "verse";       // "verse" oder "annotation"
-        public string Display { get; set; } = string.Empty; // "Johannes 3:16"
-        public string Text { get; set; } = string.Empty;    // Vers-Text
+        public string Type { get; set; } = "verse";          // "verse" oder "annotation"
+        public string Display { get; set; } = string.Empty;  // "1. Mose 1:1-3" / "Joh 3:16"
+        public string Text { get; set; } = string.Empty;     // Vers-Text (bei Range zusammengefügt)
     }
 
     private List<SlideItem> SelectedItems = new();
@@ -244,16 +259,24 @@
     private int? SelectedChapter;
 
     private List<int> VerseNumbers = new();
-    private int? SelectedVerse;
+    private int? SelectedVerseFrom;
+    private int? SelectedVerseTo;
 
-    private string MultiVerseInput = string.Empty;
+    private bool CanAddVerse =>
+        SelectedBook is not null &&
+        SelectedChapter.HasValue &&
+        SelectedVerseFrom.HasValue;
 
-    private bool CanAddSingleVerse => SelectedBook is not null && SelectedChapter.HasValue && SelectedVerse.HasValue;
-    private bool CanAddMultiVerses => SelectedBook is not null && SelectedChapter.HasValue && !string.IsNullOrWhiteSpace(MultiVerseInput);
-
-    // Duplikate verhindern (Key: lang|book|chapter|verse)
+    // Duplikate verhindern (Key: lang|book|chapter|from-to)
     private readonly HashSet<string> _verseKeys = new();
     private readonly Dictionary<SlideItem, string> _keyByItem = new();
+
+    private static string MakeKey(LanguageCode lang, int book, int chapter, int fromVerse, int? toVerse)
+    {
+        var to = toVerse ?? fromVerse;
+        if (to < fromVerse) (fromVerse, to) = (to, fromVerse);
+        return $"{lang}|{book}|{chapter}|{fromVerse}-{to}";
+    }
 
     private string NewAnnotation = string.Empty;
 
@@ -280,6 +303,15 @@
         await ReloadVerseNumbersAsync();
     }
 
+    private void OnVerseFromChanged(int? value)
+    {
+        SelectedVerseFrom = value;
+
+        // Optional: wenn "To" leer ist, direkt auf "From" setzen (fühlt sich in der UI gut an)
+        if (SelectedVerseFrom.HasValue && !SelectedVerseTo.HasValue)
+            SelectedVerseTo = SelectedVerseFrom;
+    }
+
     private async Task ReloadBooksAsync()
     {
         try
@@ -288,7 +320,8 @@
 
             SelectedBook = null;
             SelectedChapter = null;
-            SelectedVerse = null;
+            SelectedVerseFrom = null;
+            SelectedVerseTo = null;
 
             Chapters.Clear();
             VerseNumbers.Clear();
@@ -305,8 +338,10 @@
     {
         Chapters.Clear();
         VerseNumbers.Clear();
+
         SelectedChapter = null;
-        SelectedVerse = null;
+        SelectedVerseFrom = null;
+        SelectedVerseTo = null;
 
         if (SelectedBook is null) return;
 
@@ -324,7 +359,9 @@
     private async Task ReloadVerseNumbersAsync()
     {
         VerseNumbers.Clear();
-        SelectedVerse = null;
+
+        SelectedVerseFrom = null;
+        SelectedVerseTo = null;
 
         if (SelectedBook is null || !SelectedChapter.HasValue) return;
 
@@ -340,109 +377,110 @@
         }
     }
 
-    private static string MakeKey(LanguageCode lang, int book, int chapter, int verse)
-        => $"{lang}|{book}|{chapter}|{verse}";
-
-    private async Task AddSingleVerseAsync()
+    private async Task AddSelectedVerseOrRangeAsync()
     {
-        if (!CanAddSingleVerse) return;
+        if (!CanAddVerse) return;
 
-        await AddVerseCoreAsync(SelectedLanguage, SelectedBook!.Id, SelectedChapter!.Value, SelectedVerse!.Value, SelectedBook!.Name);
-    }
+        var bookId = SelectedBook!.Id;
+        var bookName = SelectedBook!.Name;
+        var chapter = SelectedChapter!.Value;
 
-    private async Task AddMultiVersesAsync()
-    {
-        if (SelectedBook is null || !SelectedChapter.HasValue) return;
+        var from = SelectedVerseFrom!.Value;
+        var to = SelectedVerseTo ?? from;
+        if (to < from) (from, to) = (to, from);
 
-        var verseList = ParseVerseList(MultiVerseInput);
-        if (verseList.Count == 0)
+        // Falls "To" gesetzt ist, aber außerhalb: einfach auf From reduzieren
+        if (!VerseNumbers.Contains(from))
         {
-            Snackbar.Add("Bitte gültige Verse eingeben (z.B. 16-18 oder 16,18,21).", Severity.Warning);
+            Snackbar.Add("Der ausgewählte Anfangsvers ist ungültig.", Severity.Warning);
             return;
         }
 
-        foreach (var v in verseList)
-            await AddVerseCoreAsync(SelectedLanguage, SelectedBook.Id, SelectedChapter.Value, v, SelectedBook.Name);
+        if (!VerseNumbers.Contains(to))
+        {
+            // Wenn To ungültig -> automatisch Single Verse
+            to = from;
+        }
 
-        MultiVerseInput = string.Empty;
-    }
-
-    private async Task<bool> AddVerseCoreAsync(LanguageCode lang, int bookId, int chapter, int verse, string bookName)
-    {
-        var key = MakeKey(lang, bookId, chapter, verse);
+        var key = MakeKey(SelectedLanguage, bookId, chapter, from, to);
         if (_verseKeys.Contains(key))
         {
-            Snackbar.Add("Dieser Vers ist bereits in der Auswahl.", Severity.Warning);
-            return false;
+            Snackbar.Add("Dieser Vers/Bereich ist bereits in der Auswahl.", Severity.Warning);
+            return;
         }
 
-        var dto = await bibleService.GetSingleVerseAsync(lang, bookId, chapter, verse);
-        if (dto is null)
+        try
         {
-            Snackbar.Add($"Vers nicht gefunden: {bookName} {chapter}:{verse}", Severity.Error);
-            return false;
-        }
-
-        var item = new SlideItem
-        {
-            Type = "verse",
-            Display = $"{dto.BookName} {dto.Chapter}:{dto.Verse}",
-            Text = dto.Text
-        };
-
-        SelectedItems.Add(item);
-        _verseKeys.Add(key);
-        _keyByItem[item] = key;
-
-        return true;
-    }
-
-    private static List<int> ParseVerseList(string input)
-    {
-        input = (input ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(input)) return new();
-
-        var result = new List<int>();
-        var parts = input.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-        foreach (var part in parts)
-        {
-            if (part.Contains('-', StringComparison.Ordinal))
+            // Single
+            if (from == to)
             {
-                var range = part.Split('-', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                if (range.Length != 2) continue;
-
-                if (int.TryParse(range[0], out var start) && int.TryParse(range[1], out var end))
+                var dto = await bibleService.GetSingleVerseAsync(SelectedLanguage, bookId, chapter, from);
+                if (dto is null)
                 {
-                    if (start <= 0 || end <= 0) continue;
-                    if (end < start) (start, end) = (end, start);
-
-                    for (var i = start; i <= end; i++)
-                        result.Add(i);
+                    Snackbar.Add($"Vers nicht gefunden: {bookName} {chapter}:{from}", Severity.Error);
+                    return;
                 }
-            }
-            else if (int.TryParse(part, out var single) && single > 0)
-            {
-                result.Add(single);
-            }
-        }
 
-        var seen = new HashSet<int>();
-        return result.Where(v => seen.Add(v)).ToList();
+                var item = new SlideItem
+                {
+                    Type = "verse",
+                    Display = $"{dto.BookName} {dto.Chapter}:{dto.Verse}",
+                    Text = dto.Text
+                };
+
+                SelectedItems.Add(item);
+                _verseKeys.Add(key);
+                _keyByItem[item] = key;
+
+                StateHasChanged();
+                return;
+            }
+
+            // Range
+            var list = await bibleService.GetVerseRangeAsync(SelectedLanguage, bookId, chapter, from, to);
+            if (list is null || list.Count == 0)
+            {
+                Snackbar.Add($"Versbereich nicht gefunden: {bookName} {chapter}:{from}-{to}", Severity.Error);
+                return;
+            }
+
+            // Texte zu einem Slide zusammenfassen (Display bleibt wie gehabt)
+            var header = $"{list[0].BookName} {chapter}:{from}-{to}";
+            var text = string.Join(" ", list.OrderBy(v => v.Verse).Select(v => v.Text));
+
+            var rangeItem = new SlideItem
+            {
+                Type = "verse",
+                Display = header,
+                Text = text
+            };
+
+            SelectedItems.Add(rangeItem);
+            _verseKeys.Add(key);
+            _keyByItem[rangeItem] = key;
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Fehler beim Hinzufügen: {ex.Message}", Severity.Error);
+        }
     }
 
     private void SaveAnnotation()
     {
         if (string.IsNullOrWhiteSpace(NewAnnotation)) return;
 
-        SelectedItems.Add(new SlideItem
+        var item = new SlideItem
         {
             Type = "annotation",
             Display = NewAnnotation.Trim(),
             Text = string.Empty
-        });
+        };
 
+        SelectedItems.Add(item);
         NewAnnotation = string.Empty;
+
         StateHasChanged();
     }
 
@@ -470,7 +508,7 @@
     {
         SelectedItems.Remove(item);
 
-        // Falls es ein Vers ist: Duplikat-Key freigeben
+        // Falls es ein Vers/Range ist: Duplikat-Key freigeben
         if (_keyByItem.TryGetValue(item, out var key))
         {
             _keyByItem.Remove(item);
@@ -482,9 +520,11 @@
 
     private async Task OpenPresentation()
     {
-        // localStorage (robust, auch in neuem Tab)
-        await JS.InvokeVoidAsync("localStorage.setItem", "slides", System.Text.Json.JsonSerializer.Serialize(SelectedItems));
-        await JS.InvokeVoidAsync("window.open", "/present", "_blank");
+        await JS.InvokeVoidAsync("localStorage.setItem", "slides",
+            System.Text.Json.JsonSerializer.Serialize(SelectedItems));
+
+        // Presenter öffnen (Laptop)
+        await JS.InvokeVoidAsync("window.open", "/presenter", "_blank");
     }
 }
 
@@ -507,4 +547,48 @@
             background-color: rgba(0, 0, 0, 0.2);
             border-radius: 4px;
         }
+
+    .fixed-item {
+        height: 100px;
+        display: flex;
+        align-items: center;
+        overflow: hidden; /* Sicherheitsnetz */
+    }
+
+    .item-content {
+        width: 100%;
+        display: flex;
+        align-items: center; /* vertikal mittig */
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .item-text {
+        flex: 1; /* nimmt den Platz */
+        min-width: 0; /* wichtig für overflow */
+        overflow: hidden;
+    }
+
+    .item-actions {
+        width: 44px;
+        height: 100%; /* nimmt exakt die Item-Höhe */
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between; /* oben / mitte / unten */
+        align-items: center;
+        padding: 6px 0; /* Luft oben/unten */
+        gap: 0; /* gap nicht nötig bei space-between */
+    }
+
+
+        /* Mehrzeiliger Text mit Cut (empfohlen) */
+        .item-text .body-text {
+            display: -webkit-box;
+            -webkit-line-clamp: 2; /* max. 2 Zeilen */
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+    
+
 </style>

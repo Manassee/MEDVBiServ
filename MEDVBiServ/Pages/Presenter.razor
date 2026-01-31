@@ -1,0 +1,293 @@
+﻿@page "/presenter"
+@layout PresentationLayout
+@inject IJSRuntime JS
+
+
+<div class="present-root">
+
+    <!-- Sidebar -->
+    <aside class="present-sidebar" @onclick:stopPropagation="true">
+        <div class="sidebar-header">
+            <div class="d-flex justify-space-between align-center">
+                <MudText Typo="Typo.h6">Presenter</MudText>
+
+                <div class="d-flex" style="gap:6px;">
+                    <MudIconButton Icon="@Icons.Material.Filled.Tv" OnClick="OpenBeamer" Title="Beamer öffnen" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Fullscreen" OnClick="ToggleFullscreen" Title="Fullscreen" />
+                </div>
+            </div>
+
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                @($"{(Slides.Count == 0 ? 0 : SafeIndex + 1)} / {Slides.Count}")
+            </MudText>
+
+            <MudDivider Class="my-2" />
+        </div>
+
+        @if (Slides.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                Keine Slides gefunden. Bitte erst über CreatePage generieren.
+            </MudText>
+        }
+        else
+        {
+            <div class="thumb-list">
+                @for (int i = 0; i < Slides.Count; i++)
+                {
+                    var slide = Slides[i];
+                    var active = i == SafeIndex;
+
+                    <MudPaper @key="i"
+                              Class="@GetThumbClass(active)"
+                              Elevation="0"
+                              @onclick="@(() => GoTo(i))">
+                        <MudText Typo="Typo.subtitle2">@slide.Display</MudText>
+
+                        @if (!string.IsNullOrWhiteSpace(slide.Text))
+                        {
+                            <MudText Typo="Typo.caption" Class="thumb-preview">
+                                @Truncate(slide.Text, 80)
+                            </MudText>
+                        }
+                    </MudPaper>
+                }
+            </div>
+
+            <MudDivider Class="my-2" />
+
+            <div class="controls">
+                <MudButton Variant="Variant.Filled" OnClick="Prev" StartIcon="@Icons.Material.Filled.ArrowBack">
+                    Zurück
+                </MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Next" EndIcon="@Icons.Material.Filled.ArrowForward">
+                    Weiter
+                </MudButton>
+            </div>
+        }
+    </aside>
+
+    <!-- Presenter Stage -->
+    <main class="present-stage" tabindex="0" @onkeydown="OnKeyDown">
+        @if (Slides.Count == 0)
+        {
+            <div class="stage-empty">
+                <MudText Typo="Typo.h4">MEDVBiServ</MudText>
+                <MudText Typo="Typo.body1" Color="Color.Secondary">
+                    Öffne eine Präsentation über CreatePage.
+                </MudText>
+            </div>
+        }
+        else
+        {
+            var current = Slides[SafeIndex];
+            SlideItem? next = (SafeIndex + 1 < Slides.Count) ? Slides[SafeIndex + 1] : null;
+
+            <div class="present-grid">
+                <div class="card">
+                    <div class="card-title">Aktuelle Folie</div>
+                    <div class="slide-title">@current.Display</div>
+                    @if (!string.IsNullOrWhiteSpace(current.Text))
+                    {
+                        <div class="slide-text">@current.Text</div>
+                    }
+                </div>
+
+                <div class="card">
+                    <div class="card-title">Nächste Folie</div>
+                    @if (next is null)
+                    {
+                        <div class="slide-title">— Ende —</div>
+                    }
+                    else
+                    {
+                        <div class="slide-title">@next.Display</div>
+                        @if (!string.IsNullOrWhiteSpace(next.Text))
+                        {
+                            <div class="slide-text">@next.Text</div>
+                        }
+                    }
+                </div>
+
+                <div class="card notes">
+                    <div class="card-title">Notizen (optional)</div>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        (Später: Notizen pro Slide aus .medvpres)
+                    </MudText>
+                </div>
+            </div>
+        }
+    </main>
+
+</div>
+
+@code {
+    public class SlideItem
+    {
+        public string Type { get; set; } = "verse";
+        public string Display { get; set; } = string.Empty;
+        public string Text { get; set; } = string.Empty;
+    }
+
+    private List<SlideItem> Slides = new();
+    private int CurrentIndex = 0;
+
+    private DotNetObjectReference<Presenter>? _dotNetRef;
+
+    // ✅ immer sicherer Index (kein OutOfRange)
+    private int SafeIndex => ClampIndex(CurrentIndex);
+
+    private string GetThumbClass(bool active)
+        => active ? "thumb active" : "thumb";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // Slides aus localStorage laden (einmalig)
+        Slides = await LoadSlidesFromLocalStorageAsync();
+        CurrentIndex = ClampIndex(CurrentIndex);
+
+        // .NET Callback für JS registrieren
+        _dotNetRef = DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync("medvPresenter.registerDotNet", _dotNetRef);
+
+        // Initial State senden
+        await SendStateAsync();
+
+        StateHasChanged();
+    }
+
+    private async Task<List<SlideItem>> LoadSlidesFromLocalStorageAsync()
+    {
+        try
+        {
+            var json = await JS.InvokeAsync<string>("localStorage.getItem", "slides");
+            if (string.IsNullOrWhiteSpace(json)) return new List<SlideItem>();
+
+            var data = System.Text.Json.JsonSerializer.Deserialize<List<SlideItem>>(json);
+            return data ?? new List<SlideItem>();
+        }
+        catch
+        {
+            return new List<SlideItem>();
+        }
+    }
+
+    private int ClampIndex(int index)
+    {
+        if (Slides.Count == 0) return 0;
+        return Math.Clamp(index, 0, Slides.Count - 1);
+    }
+
+    private async Task SendStateAsync()
+    {
+        var state = new
+        {
+            currentIndex = SafeIndex,
+            total = Slides.Count
+        };
+
+        await JS.InvokeVoidAsync("medvPresenter.sendState", state);
+    }
+
+    // ✅ Wird vom JS aufgerufen (BroadcastChannel)
+    [JSInvokable]
+    public async Task OnChannelMessage(string type)
+    {
+        if (type == "REQUEST_STATE")
+        {
+            await SendStateAsync();
+        }
+    }
+
+    private async Task OpenBeamer()
+    {
+        await JS.InvokeVoidAsync("medvPresenter.openBeamer", "/screen");
+        await Task.Delay(50);
+        await SendStateAsync();
+    }
+
+    private async Task ToggleFullscreen()
+        => await JS.InvokeVoidAsync("medvPresenter.toggleFullscreen");
+
+    private async Task Next()
+    {
+        if (Slides.Count == 0) return;
+        if (CurrentIndex < Slides.Count - 1) CurrentIndex++;
+        await SendStateAsync();
+        StateHasChanged();
+    }
+
+    private async Task Prev()
+    {
+        if (Slides.Count == 0) return;
+        if (CurrentIndex > 0) CurrentIndex--;
+        await SendStateAsync();
+        StateHasChanged();
+    }
+
+    private async Task GoTo(int index)
+    {
+        if (Slides.Count == 0) return;
+        CurrentIndex = Math.Clamp(index, 0, Slides.Count - 1);
+        await SendStateAsync();
+        StateHasChanged();
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "ArrowRight":
+            case " ":
+            case "Enter":
+                await Next();
+                break;
+
+            case "ArrowLeft":
+            case "Backspace":
+                await Prev();
+                break;
+        }
+    }
+
+    private static string Truncate(string text, int max)
+        => string.IsNullOrWhiteSpace(text) ? "" : (text.Length <= max ? text : text[..max] + "…");
+
+    public void Dispose()
+    {
+        _dotNetRef?.Dispose();
+    }
+}
+
+   
+
+    <style>
+        .present-root{display:flex;height:100vh;background:#0f1115;color:white;}
+        .present-sidebar{
+            width:340px;min-width:300px;padding:14px;background:#12151c;
+            border-right:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;gap:10px;
+        }
+        .thumb-list{overflow:auto;display:flex;flex-direction:column;gap:10px;padding-right:6px;}
+        .thumb{padding:12px;border-radius:12px;background:rgba(255,255,255,0.06);cursor:pointer;border:1px solid rgba(255,255,255,0.06);}
+        .thumb:hover{background:rgba(255,255,255,0.10);}
+        .thumb.active{background:rgba(255,255,255,0.14);border-color:rgba(255,255,255,0.20);}
+        .thumb-preview{opacity:0.8;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+        .controls{display:flex;gap:10px;justify-content:space-between;}
+        .present-stage{flex:1;padding:18px;outline:none;}
+        .present-grid{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto auto;gap:14px;height:100%;}
+        .card{border-radius:16px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);padding:16px;overflow:auto;}
+        .card.notes{grid-column:1 / span 2;}
+        .card-title{font-size:0.95rem;opacity:0.85;margin-bottom:10px;font-weight:700;}
+        .slide-title{font-size:1.6rem;font-weight:800;margin-bottom:10px;line-height:1.15;}
+        .slide-text{font-size:1.1rem;line-height:1.4;white-space:pre-wrap;opacity:0.95;}
+        .stage-empty{display:flex;flex-direction:column;justify-content:center;align-items:center;height:100%;opacity:0.85;}
+        @@media (max-width: 1000px){
+          .present-root{flex-direction:column;}
+          .present-sidebar{width:100%;min-width:unset;border-right:none;border-bottom:1px solid rgba(255,255,255,0.08);}
+          .present-grid{grid-template-columns:1fr;grid-template-rows:auto auto auto;}
+          .card.notes{grid-column:auto;}
+        }
+    
+    </style>
