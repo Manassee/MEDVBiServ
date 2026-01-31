@@ -1,9 +1,13 @@
 ﻿@page "/CreatePage"
 
+@using MEDVBiServ.HelperClass
 @using MEDVBiServ.Interfaces
+@using MEDVBiServ.Models
 @using MEDVBiServ.Services
 @using MEDVBiServ.Contracts.Dtos
 @using MEDVBiServ.Contracts.Enums
+@using System.Text.Json
+
 
 @layout OverviewLayout
 
@@ -243,14 +247,9 @@
 {
     private LanguageCode SelectedLanguage = LanguageCode.De;
 
-    public class SlideItem
-    {
-        public string Type { get; set; } = "verse";          // "verse" oder "annotation"
-        public string Display { get; set; } = string.Empty;  // "1. Mose 1:1-3" / "Joh 3:16"
-        public string Text { get; set; } = string.Empty;     // Vers-Text (bei Range zusammengefügt)
-    }
+    
 
-    private List<SlideItem> SelectedItems = new();
+    private List<MedvSlideItem> SelectedItems = new();
 
     private List<BookInfos> Books = new();
     private BookInfos? SelectedBook;
@@ -269,7 +268,7 @@
 
     // Duplikate verhindern (Key: lang|book|chapter|from-to)
     private readonly HashSet<string> _verseKeys = new();
-    private readonly Dictionary<SlideItem, string> _keyByItem = new();
+    private readonly Dictionary<MedvSlideItem, string> _keyByItem = new();
 
     private static string MakeKey(LanguageCode lang, int book, int chapter, int fromVerse, int? toVerse)
     {
@@ -421,7 +420,7 @@
                     return;
                 }
 
-                var item = new SlideItem
+                var item = new MedvSlideItem
                 {
                     Type = "verse",
                     Display = $"{dto.BookName} {dto.Chapter}:{dto.Verse}",
@@ -448,7 +447,7 @@
             var header = $"{list[0].BookName} {chapter}:{from}-{to}";
             var text = string.Join(" ", list.OrderBy(v => v.Verse).Select(v => v.Text));
 
-            var rangeItem = new SlideItem
+            var rangeItem = new MedvSlideItem
             {
                 Type = "verse",
                 Display = header,
@@ -471,7 +470,7 @@
     {
         if (string.IsNullOrWhiteSpace(NewAnnotation)) return;
 
-        var item = new SlideItem
+        var item = new MedvSlideItem
         {
             Type = "annotation",
             Display = NewAnnotation.Trim(),
@@ -484,7 +483,7 @@
         StateHasChanged();
     }
 
-    private void MoveUp(SlideItem item)
+    private void MoveUp(MedvSlideItem item)
     {
         var index = SelectedItems.IndexOf(item);
         if (index <= 0) return;
@@ -494,7 +493,7 @@
         StateHasChanged();
     }
 
-    private void MoveDown(SlideItem item)
+    private void MoveDown(MedvSlideItem item)
     {
         var index = SelectedItems.IndexOf(item);
         if (index < 0 || index >= SelectedItems.Count - 1) return;
@@ -504,7 +503,7 @@
         StateHasChanged();
     }
 
-    private void RemoveItem(SlideItem item)
+    private void RemoveItem(MedvSlideItem item)
     {
         SelectedItems.Remove(item);
 
@@ -520,12 +519,108 @@
 
     private async Task OpenPresentation()
     {
-        await JS.InvokeVoidAsync("localStorage.setItem", "slides",
-            System.Text.Json.JsonSerializer.Serialize(SelectedItems));
+        if (SelectedItems.Count == 0)
+        {
+            Snackbar.Add(
+                "Keine Folien vorhanden. Bitte füge zuerst Verse oder Anmerkungen hinzu.",
+                Severity.Warning
+            );
+            return;
+        }
 
-        // Presenter öffnen (Laptop)
+        var saved = await SaveProjectFileAsync();
+        if (!saved)
+            return;
+
+        // Für aktuellen Lauf
+        await JS.InvokeVoidAsync(
+            "localStorage.setItem",
+            "slides",
+            JsonSerializer.Serialize(SelectedItems)
+        );
+
         await JS.InvokeVoidAsync("window.open", "/presenter", "_blank");
+        
     }
+
+
+    private async Task<bool> SaveProjectFileAsync()
+    {
+        try
+        {
+            var title = $"Gottesdienst_{DateTime.Now:dd-MM-yyyy}";
+            var project = new MedvPresProject
+            {
+                Title = title,
+                CreatedAt = DateTime.Now,
+                Language = SelectedLanguage.ToString().ToLower(),
+                Slides = SelectedItems.ToList()
+            };
+
+            var bytes = MedvPresSerializer.ToMedvPresBytes(project);
+
+            // ✅ Erst App-Ordner (Auto Prompt beim ersten Mal), sonst Download-Fallback
+            var fileName = $"{title}.medvpres";
+            var ok = await SaveBackupAsync(fileName, bytes);
+
+            if (!ok)
+                return false;
+
+            Snackbar.Add(
+                $"Präsentation erstellt und gespeichert ({fileName})",
+                Severity.Success
+            );
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(
+                $"Fehler beim erstellen der Präsentation: {ex.Message}",
+                Severity.Error
+            );
+
+            return false;
+        }
+    }
+
+
+    private async Task<bool> SaveBackupAsync(string fileName, byte[] bytes)
+    {
+        try
+        {
+            var base64 = Convert.ToBase64String(bytes);
+
+            // 1) Versuche: App-Ordner (Auto-Prompt beim ersten Mal)
+            try
+            {
+                await JS.InvokeVoidAsync("medvFs.saveFileToAppFolder", fileName, base64);
+
+                Snackbar.Add($"Backup gespeichert im App-Ordner: {fileName}", Severity.Success);
+                return true;
+            }
+            catch (Exception exFs)
+            {
+                // 2) Fallback: Download (damit es immer funktioniert)
+                await JS.InvokeVoidAsync("medvFiles.downloadBytes", fileName, base64);
+
+                Snackbar.Add(
+                    $"Ordner-Speichern nicht möglich → als Download gespeichert: {fileName}",
+                    Severity.Warning
+                );
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Fehler beim Backup-Speichern: {ex.Message}", Severity.Error);
+            return false;
+        }
+    }
+
+
+
+
 }
 
 <style>
