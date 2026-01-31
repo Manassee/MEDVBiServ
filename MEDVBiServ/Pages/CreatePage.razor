@@ -520,8 +520,11 @@
 
     private async Task OpenPresentation()
     {
-        await JS.InvokeVoidAsync("localStorage.setItem", "slides", System.Text.Json.JsonSerializer.Serialize(SelectedItems));
-        await JS.InvokeVoidAsync("window.open", "/present", "_blank");
+        await JS.InvokeVoidAsync("localStorage.setItem", "slides",
+            System.Text.Json.JsonSerializer.Serialize(SelectedItems));
+
+        // Presenter öffnen (Laptop)
+        await JS.InvokeVoidAsync("window.open", "/presenter", "_blank");
     }
 }
 

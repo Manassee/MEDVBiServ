@@ -1,9 +1,10 @@
 ﻿@page "/"
 
 @using System.Text.Json
+@using System.Globalization;
 
 @inject IJSRuntime JS
-@layout NavMenu
+@layout MainLayout
 
 @inject NavigationManager NavigationManager
 
@@ -27,7 +28,7 @@
             <!-- Top KPI Row -->
             <MudGrid Spacing="3" Class="mt-6">
 
-                <MudItem xs="12" sm="6" md="3">
+                <MudItem xs="12" sm="6" md="6">
                     <MudPaper Elevation="2" Class="pa-4 kpi-card">
                         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
                             <MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Large" Color="Color.Primary" />
@@ -39,7 +40,7 @@
                     </MudPaper>
                 </MudItem>
 
-                <MudItem xs="12" sm="6" md="3">
+                <MudItem xs="12" sm="6" md="6">
                     <MudPaper Elevation="2" Class="pa-4 kpi-card">
                         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
                             <MudIcon Icon="@Icons.Material.Filled.FormatListNumbered" Size="Size.Large" Color="Color.Info" />
@@ -51,7 +52,7 @@
                     </MudPaper>
                 </MudItem>
 
-                <MudItem xs="12" sm="6" md="3">
+                <MudItem xs="12" sm="6" md="6">
                     <MudPaper Elevation="2" Class="pa-4 kpi-card">
                         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
                             <MudIcon Icon="@Icons.Material.Filled.Notes" Size="Size.Large" Color="Color.Secondary" />
@@ -63,7 +64,7 @@
                     </MudPaper>
                 </MudItem>
 
-                <MudItem xs="12" sm="6" md="3">
+                <MudItem xs="12" sm="6" md="6">
                     <MudPaper Elevation="2" Class="pa-4 kpi-card">
                         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
                             <MudIcon Icon="@Icons.Material.Filled.History" Size="Size.Large" Color="Color.Success" />
@@ -77,6 +78,7 @@
 
             </MudGrid>
 
+
         </MudGrid>
     </MudPaper>
 </MudContainer>
@@ -84,11 +86,15 @@
 
 @code {
 
+    
+
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
+    private readonly CultureInfo _de = new("de-DE");
+    private string NowText => _now.ToString("dddd, dd.MM.yyyy • HH:mm:ss", _de);
 
     private System.Timers.Timer? _timer;
     private DateTime _now = DateTime.Now;
-    private string NowText => _now.ToString("dd.MM.yyyy • HH:mm:ss");
+   
 
     // Dashboard-Daten (aus localStorage)
     private List<SlideItem> LastItems = new();
