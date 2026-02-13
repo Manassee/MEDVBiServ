@@ -1,12 +1,12 @@
 ﻿@page "/"
 
 @using System.Text.Json
-@using System.Globalization;
-
+@using System.Globalization
 @inject IJSRuntime JS
 @layout MainLayout
-
 @inject NavigationManager NavigationManager
+
+@implements IDisposable
 
 <MudContainer MaxWidth="MaxWidth.False" Class="mt-10 px-8">
 
@@ -78,30 +78,31 @@
 
             </MudGrid>
 
-
         </MudGrid>
     </MudPaper>
 </MudContainer>
 
-
-@code {
-
-    
-
+@code
+{
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
     private readonly CultureInfo _de = new("de-DE");
-    private string NowText => _now.ToString("dddd, dd.MM.yyyy • HH:mm:ss", _de);
 
     private System.Timers.Timer? _timer;
     private DateTime _now = DateTime.Now;
-   
+
+    private DotNetObjectReference<MEDVBiServ.Pages.HomePage>? _dotNetRef;
+    private bool _storageListenerRegistered;
+
+    
 
     // Dashboard-Daten (aus localStorage)
     private List<SlideItem> LastItems = new();
     private DateTime? LastCreatedAt;
 
+    private string NowText => _now.ToString("dddd, dd.MM.yyyy • HH:mm:ss", _de);
+
     private int SelectedCount => LastItems.Count;
-    private int AnnotationCount => LastItems.Count(x => x.Type == "annotation");
+    private int AnnotationCount => LastItems.Count(x => string.Equals(x.Type, "annotation", StringComparison.OrdinalIgnoreCase));
 
     private string LastCreatedText =>
         LastCreatedAt is null
@@ -111,7 +112,20 @@
     protected override async Task OnInitializedAsync()
     {
         StartClock();
+
+        // Wenn du innerhalb der App navigierst, sollen die KPI immer korrekt sein:
+        NavigationManager.LocationChanged += OnLocationChanged;
+
         await ReloadFromLocalStorage();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // Storage-Event: reagiert, wenn ein anderer Tab localStorage ändert
+        _dotNetRef = DotNetObjectReference.Create(this);
+        await RegisterStorageListenerOnce();
     }
 
     private void StartClock()
@@ -126,38 +140,66 @@
         _timer.Start();
     }
 
-    private async Task ReloadFromLocalStorage()
+    private async void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {
-        // slides
-        var slidesJson = await JS.InvokeAsync<string>("localStorage.getItem", "slides");
-        if (!string.IsNullOrWhiteSpace(slidesJson))
-        {
-            try
-            {
-                LastItems = JsonSerializer.Deserialize<List<SlideItem>>(slidesJson, _jsonOptions) ?? new();
-            }
-            catch
-            {
-                LastItems = new();
-            }
-        }
-        else
-        {
-            LastItems = new();
-        }
-
-        // createdAt (optional)
-        var createdAt = await JS.InvokeAsync<string>("localStorage.getItem", "slidesCreatedAt");
-        if (!string.IsNullOrWhiteSpace(createdAt) && DateTime.TryParse(createdAt, out var dt))
-            LastCreatedAt = dt;
-        else
-            LastCreatedAt = null;
-
-        StateHasChanged();
+        // Fire-and-forget ist hier ok, weil wir nur State aktualisieren
+        await ReloadFromLocalStorage();
     }
 
-    private static string Shorten(string text, int max)
-        => string.IsNullOrWhiteSpace(text) ? "" : (text.Length <= max ? text : text.Substring(0, max) + "…");
+    private async Task ReloadFromLocalStorage()
+    {
+        LastItems = await ReadSlidesFromStorage();
+        LastCreatedAt = await ReadCreatedAtFromStorage();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task<List<SlideItem>> ReadSlidesFromStorage()
+    {
+        var slidesJson = await JS.InvokeAsync<string>("localStorage.getItem", "slides");
+        if (string.IsNullOrWhiteSpace(slidesJson))
+            return new();
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<SlideItem>>(slidesJson, _jsonOptions) ?? new();
+        }
+        catch
+        {
+            return new();
+        }
+    }
+
+    private async Task<DateTime?> ReadCreatedAtFromStorage()
+    {
+        var createdAt = await JS.InvokeAsync<string>("localStorage.getItem", "slidesCreatedAt");
+        if (string.IsNullOrWhiteSpace(createdAt))
+            return null;
+
+        // Robust: ISO oder de-DE – je nachdem wie du speicherst
+        if (DateTime.TryParse(createdAt, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var isoDt))
+            return isoDt;
+
+        if (DateTime.TryParse(createdAt, _de, DateTimeStyles.None, out var deDt))
+            return deDt;
+
+        return null;
+    }
+
+    // Wird aus JS aufgerufen, wenn localStorage sich ändert (anderer Tab)
+    [JSInvokable]
+    public async Task OnStorageChanged()
+    {
+        await ReloadFromLocalStorage();
+    }
+
+    private async Task RegisterStorageListenerOnce()
+    {
+        if (_storageListenerRegistered) return;
+        _storageListenerRegistered = true;
+
+        // erwartet die JS-Funktion window.medvStorage.register(dotNetRef)
+        await JS.InvokeVoidAsync("medvStorage.register", _dotNetRef);
+    }
 
     public class SlideItem
     {
@@ -168,8 +210,12 @@
 
     public void Dispose()
     {
+        NavigationManager.LocationChanged -= OnLocationChanged;
+
         _timer?.Stop();
         _timer?.Dispose();
+
+        _dotNetRef?.Dispose();
     }
 }
 
@@ -190,5 +236,3 @@
         border-radius: 16px;
     }
 </style>
-
-}

@@ -21,6 +21,24 @@
         });
     }
 
+    async function getAllTitles() {
+        const db = await openDb();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE, "readonly");
+            const store = tx.objectStore(STORE);
+            const req = store.getAll();
+
+            req.onsuccess = () => {
+                const titles = (req.result || [])
+                    .map(x => x.title)
+                    .filter(Boolean);
+                resolve(titles);
+            };
+
+            req.onerror = () => reject(req.error);
+        });
+    }
+
     async function save(project) {
         const db = await open();
         return new Promise((res, rej) => {
@@ -61,5 +79,5 @@
         });
     }
 
-    return { save, list, get, remove };
+    return { getAllTitles, save, list, get, remove };
 })();

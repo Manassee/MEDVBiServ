@@ -9,26 +9,37 @@
 
 <div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
     <nav class="flex-column">
-        <div class="nav-item px3">
-            <NavLink class="nav-link" href="HomePage" Icon="@Icons.Material.Filled.Home">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">
+                <MudIcon Icon="@Icons.Material.Filled.Home" Class="me-2" />
                 Home
             </NavLink>
         </div>
+
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="CreatePage" target="_blank">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Predigt erstellen
+            <NavLink class="nav-link" href="/CreatePage" target="_blank">
+                Predigt erstellen
             </NavLink>
         </div>
+
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="listView">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Predigt Liste
+            <NavLink class="nav-link" href="/listView">
+                Predigt Liste
             </NavLink>
         </div>
+
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="database">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Bibel Datenbank
+            <NavLink class="nav-link" href="/database">
+                Bibel Datenbank
             </NavLink>
         </div>
+
+        <div class="nav-item px3">
+            <NavLink class="nav-link" href="/notifications">
+               Benachrichtigung
+            </NavLink>
+        </div>
+
     </nav>
 </div>
 

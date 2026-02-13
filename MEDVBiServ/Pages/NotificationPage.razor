@@ -1,0 +1,471 @@
+﻿@page "/notifications"
+
+@using System.Text.Json
+@using System.Globalization
+@inject HttpClient Http
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+@layout MainLayout
+
+<MudContainer MaxWidth="MaxWidth.False" Class="mt-6 px-6">
+
+    <MudPaper Elevation="2" Class="pa-4 mb-4">
+        <MudStack Row="true" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween">
+            <div>
+                <MudText Typo="Typo.h4">🔔 Notifications</MudText>
+                <MudText Typo="Typo.caption" Class="text-muted">
+                    Nachrichten an alle Gruppen – offline schreiben, automatisch senden sobald Internet da ist.
+                </MudText>
+            </div>
+
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                <MudChip Color="@(_isOnline ? Color.Success : Color.Warning)" Variant="Variant.Filled" Icon="@(_isOnline ? Icons.Material.Filled.Wifi : Icons.Material.Filled.WifiOff)">
+                    @(_isOnline ? "Online" : "Offline")
+                </MudChip>
+
+                <MudChip Color="Color.Info" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.CloudSync">
+                    Cache: @_messages.Count
+                </MudChip>
+
+                <MudChip Color="@(_outbox.Count == 0 ? Color.Default : Color.Secondary)" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Outbox">
+                    Outbox: @_outbox.Count
+                </MudChip>
+
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="ManualRefresh" Disabled="_busy">
+                    Aktualisieren
+                </MudButton>
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+
+    <!-- Composer -->
+    <MudPaper Elevation="2" Class="pa-4 mb-4">
+        <MudText Typo="Typo.h6" Class="mb-2">✍️ Neue Nachricht</MudText>
+
+        <MudTextField @bind-Value="_draftText"
+                      Placeholder="Schreibe eine Nachricht an alle…"
+                      Lines="4"
+                      Variant="Variant.Outlined"
+                      FullWidth="true"
+                      Disabled="_busy"
+                      Immediate="true"
+                      MaxLength="1000" />
+
+        <MudStack Row="true" Spacing="2" Class="mt-3" AlignItems="AlignItems.Center">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Send"
+                       OnClick="QueueAndTrySend"
+                       Disabled="_busy || string.IsNullOrWhiteSpace(_draftText)">
+                Senden
+            </MudButton>
+
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Default"
+                       StartIcon="@Icons.Material.Filled.Delete"
+                       OnClick="@(()=> _draftText = string.Empty)"
+                       Disabled="_busy || string.IsNullOrWhiteSpace(_draftText)">
+                Leeren
+            </MudButton>
+
+            <MudText Typo="Typo.caption" Class="text-muted">
+                Wenn du offline bist, landet die Nachricht in der Outbox und wird später automatisch gesendet.
+            </MudText>
+        </MudStack>
+    </MudPaper>
+
+    <!-- Messages -->
+    <MudPaper Elevation="2" Class="pa-4">
+        <MudStack Row="true" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween" Class="mb-2">
+            <MudText Typo="Typo.h6">📨 Nachrichten (global)</MudText>
+            <MudText Typo="Typo.caption" Class="text-muted">
+                Neueste zuerst
+            </MudText>
+        </MudStack>
+
+        @if (_messages.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Class="text-muted">Noch keine Nachrichten.</MudText>
+        }
+        else
+        {
+            <MudList Dense="true">
+                @foreach (var m in _messages.OrderByDescending(x => x.CreatedAt))
+                {
+                    <MudListItem>
+                        <MudStack Spacing="0.5">
+                            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                <MudText Typo="Typo.subtitle2" Class="fw-700">
+                                    @m.Author
+                                </MudText>
+
+                                <MudText Typo="Typo.caption" Class="text-muted">
+                                    • @m.CreatedAt.ToString("dd.MM.yyyy HH:mm", _de)
+                                </MudText>
+
+                                @if (!string.IsNullOrWhiteSpace(m.Status))
+                                {
+                                    <MudChip Size="Size.Small"
+                                             Variant="Variant.Outlined"
+                                             Color="@StatusColor(m.Status)">
+                                        @m.Status
+                                    </MudChip>
+                                }
+                            </MudStack>
+
+                            <MudText Typo="Typo.body2">@m.Text</MudText>
+                        </MudStack>
+                    </MudListItem>
+                    <MudDivider />
+                }
+            </MudList>
+        }
+    </MudPaper>
+
+</MudContainer>
+
+
+@code
+                                             {
+    // ---------- API ----------
+    // Passe ggf. an deinen Controller an:
+    private const string ApiGet = "api/notifications";
+    private const string ApiPost = "api/notifications";
+
+    // ---------- Storage Keys ----------
+    private const string StorageMessages = "medv_notifications_cache";
+    private const string StorageOutbox = "medv_notifications_outbox";
+
+    private readonly JsonSerializerOptions _json = new(JsonSerializerDefaults.Web);
+    private readonly CultureInfo _de = new("de-DE");
+
+    private bool _isOnline = true;
+    private bool _busy;
+
+    private string _draftText = string.Empty;
+
+    private List<NotificationMessage> _messages = new();
+    private List<OutboxItem> _outbox = new();
+
+    private System.Timers.Timer? _syncTimer;
+    private DotNetObjectReference<NotificationPage>? _dotNetRef;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // 1) Local load (offline-ready)
+        _messages = await LoadFromLocalStorage<List<NotificationMessage>>(StorageMessages) ?? new();
+        _outbox = await LoadFromLocalStorage<List<OutboxItem>>(StorageOutbox) ?? new();
+
+        // 2) Online status
+        _isOnline = await GetOnlineStatus();
+
+        // 3) timer: versucht regelmäßig zu syncen (z.B. alle 5s)
+        StartSyncTimer();
+
+        // 4) initial sync (wenn online)
+        await TrySyncAll();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // Online/Offline Events aus JS
+        _dotNetRef = DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync("medvNet.register", _dotNetRef);
+    }
+
+    private void StartSyncTimer()
+    {
+        _syncTimer = new System.Timers.Timer(5000);
+        _syncTimer.Elapsed += async (_, __) =>
+        {
+            await InvokeAsync(TrySyncAll);
+        };
+        _syncTimer.AutoReset = true;
+        _syncTimer.Start();
+    }
+
+    private async Task ManualRefresh()
+    {
+        await TryFetchLatest();
+        await TrySendOutbox();
+    }
+
+    private async Task QueueAndTrySend()
+    {
+        var text = (_draftText ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(text))
+            return;
+
+        _draftText = string.Empty;
+
+        // Outbox item (offline-first)
+        var item = new OutboxItem
+        {
+            LocalId = Guid.NewGuid().ToString("N"),
+            Text = text,
+            CreatedAt = DateTimeOffset.Now
+        };
+        _outbox.Insert(0, item);
+        await SaveToLocalStorage(StorageOutbox, _outbox);
+
+        // Optimistic: direkt in UI anzeigen (als Pending)
+        _messages.Insert(0, new NotificationMessage
+        {
+            Id = "local-" + item.LocalId,
+            Author = "Du",
+            Text = text,
+            CreatedAt = item.CreatedAt,
+            Status = _isOnline ? "Wird gesendet…" : "Offline (Outbox)"
+        });
+        await SaveToLocalStorage(StorageMessages, _messages);
+
+        Snackbar.Add(_isOnline ? "Nachricht wird gesendet…" : "Offline: Nachricht in Outbox gespeichert.", _isOnline ? Severity.Info : Severity.Warning);
+
+        await TrySendOutbox();
+    }
+
+    private async Task TrySyncAll()
+    {
+        _isOnline = await GetOnlineStatus();
+
+        // Wenn offline: nur UI-Status aktualisieren
+        if (!_isOnline)
+        {
+            MarkPendingAsOffline();
+            return;
+        }
+
+        await TrySendOutbox();
+        await TryFetchLatest();
+    }
+
+    private void MarkPendingAsOffline()
+    {
+        bool changed = false;
+        foreach (var m in _messages)
+        {
+            if (m.Id.StartsWith("local-") && (m.Status?.StartsWith("Wird") == true || m.Status == null))
+            {
+                m.Status = "Offline (Outbox)";
+                changed = true;
+            }
+        }
+        if (changed)
+        {
+            _ = SaveToLocalStorage(StorageMessages, _messages);
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task TrySendOutbox()
+    {
+        if (!_isOnline) return;
+        if (_busy) return;
+        if (_outbox.Count == 0) return;
+
+        _busy = true;
+        try
+        {
+            // sende FIFO (älteste zuerst) oder LIFO – hier: älteste zuerst
+            var ordered = _outbox.OrderBy(x => x.CreatedAt).ToList();
+
+            foreach (var item in ordered)
+            {
+                // UI: markiere lokale Nachricht als "Wird gesendet…"
+                SetLocalStatus(item.LocalId, "Wird gesendet…");
+
+                var payload = new CreateNotificationRequest
+                {
+                    Text = item.Text,
+                    Author = "MEDV" // optional: später aus Login/User nehmen
+                };
+
+                try
+                {
+                    var resp = await Http.PostAsJsonAsync(ApiPost, payload, _json);
+                    if (!resp.IsSuccessStatusCode)
+                    {
+                        SetLocalStatus(item.LocalId, "Fehler beim Senden");
+                        continue;
+                    }
+
+                    // gesendet -> aus Outbox entfernen
+                    _outbox.RemoveAll(x => x.LocalId == item.LocalId);
+                    await SaveToLocalStorage(StorageOutbox, _outbox);
+
+                    // lokale “pending” Nachricht als “Gesendet” markieren
+                    SetLocalStatus(item.LocalId, "Gesendet");
+
+                    // optional: direkt neu laden, um Server-ID zu bekommen
+                    // (wir machen das gleich in TryFetchLatest)
+                }
+                catch
+                {
+                    SetLocalStatus(item.LocalId, "Fehler beim Senden");
+                }
+            }
+        }
+        finally
+        {
+            _busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task TryFetchLatest()
+    {
+        if (!_isOnline) return;
+        if (_busy) return;
+
+        _busy = true;
+        try
+        {
+            var serverMessages = await Http.GetFromJsonAsync<List<NotificationMessage>>(ApiGet, _json);
+            if (serverMessages is null) return;
+
+            // Merge: Server ist “Quelle der Wahrheit”
+            // Entferne lokale pending, die jetzt vermutlich serverseitig da sind.
+            var pending = _messages.Where(m => m.Id.StartsWith("local-")).ToList();
+
+            // Beste Strategie ohne Auth/Correlation:
+            // - Server-Liste übernehmen
+            // - Pending, die noch in Outbox sind, oben ergänzen
+            _messages = serverMessages;
+
+            foreach (var outItem in _outbox.OrderByDescending(x => x.CreatedAt))
+            {
+                _messages.Insert(0, new NotificationMessage
+                {
+                    Id = "local-" + outItem.LocalId,
+                    Author = "Du",
+                    Text = outItem.Text,
+                    CreatedAt = outItem.CreatedAt,
+                    Status = _isOnline ? "Wird gesendet…" : "Offline (Outbox)"
+                });
+            }
+
+            await SaveToLocalStorage(StorageMessages, _messages);
+        }
+        catch
+        {
+            // Wenn fetch fehlschlägt, bleiben wir bei Cache
+        }
+        finally
+        {
+            _busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void SetLocalStatus(string localId, string status)
+    {
+        var id = "local-" + localId;
+        var msg = _messages.FirstOrDefault(x => x.Id == id);
+        if (msg != null)
+        {
+            msg.Status = status;
+            _ = SaveToLocalStorage(StorageMessages, _messages);
+        }
+    }
+
+    private Color StatusColor(string status)
+        => status switch
+        {
+            "Gesendet" => Color.Success,
+            "Fehler beim Senden" => Color.Error,
+            "Offline (Outbox)" => Color.Warning,
+            _ => Color.Info
+        };
+
+    // ---- Online/Offline Events aus JS ----
+    [JSInvokable]
+    public async Task OnNetChanged(bool online)
+    {
+        _isOnline = online;
+
+        if (_isOnline)
+        {
+            Snackbar.Add("Internet wieder da – Outbox wird gesendet…", Severity.Success);
+            await TrySyncAll();
+        }
+        else
+        {
+            Snackbar.Add("Du bist offline – Nachrichten werden in der Outbox gespeichert.", Severity.Warning);
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task<bool> GetOnlineStatus()
+    {
+        try
+        {
+            return await JS.InvokeAsync<bool>("medvNet.isOnline");
+        }
+        catch
+        {
+            // Fallback
+            return true;
+        }
+    }
+
+    // ---- localStorage helpers ----
+    private async Task<T?> LoadFromLocalStorage<T>(string key)
+    {
+        var json = await JS.InvokeAsync<string>("localStorage.getItem", key);
+        if (string.IsNullOrWhiteSpace(json)) return default;
+
+        try { return JsonSerializer.Deserialize<T>(json, _json); }
+        catch { return default; }
+    }
+
+    private async Task SaveToLocalStorage<T>(string key, T value)
+    {
+        var json = JsonSerializer.Serialize(value, _json);
+        await JS.InvokeVoidAsync("localStorage.setItem", key, json);
+    }
+
+    public void Dispose()
+    {
+        _syncTimer?.Stop();
+        _syncTimer?.Dispose();
+        _dotNetRef?.Dispose();
+    }
+
+    // ---- DTOs ----
+    public sealed class NotificationMessage
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N");
+        public string Author { get; set; } = "System";
+        public string Text { get; set; } = "";
+        public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
+
+        // nur clientseitig
+        public string? Status { get; set; }
+    }
+
+    public sealed class OutboxItem
+    {
+        public string LocalId { get; set; } = Guid.NewGuid().ToString("N");
+        public string Text { get; set; } = "";
+        public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
+    }
+
+    public sealed class CreateNotificationRequest
+    {
+        public string Text { get; set; } = "";
+        public string Author { get; set; } = "MEDV";
+    }
+}
+
+<style>
+    .fw-700 {
+        font-weight: 700;
+    }
+
+    .text-muted {
+        opacity: .75;
+    }
+</style>

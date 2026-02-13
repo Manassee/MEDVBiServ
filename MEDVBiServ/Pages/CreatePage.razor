@@ -7,6 +7,8 @@
 @using MEDVBiServ.Contracts.Dtos
 @using MEDVBiServ.Contracts.Enums
 @using System.Text.Json
+@using Microsoft.AspNetCore.Components;
+@using Microsoft.AspNetCore.Components.Routing
 
 
 @layout OverviewLayout
@@ -249,6 +251,9 @@
 
     
 
+    [Parameter, SupplyParameterFromQuery(Name = "projectId")]
+    public string? ProjectId { get; set; }
+
     private List<MedvSlideItem> SelectedItems = new();
 
     private List<BookInfos> Books = new();
@@ -270,6 +275,11 @@
     private readonly HashSet<string> _verseKeys = new();
     private readonly Dictionary<MedvSlideItem, string> _keyByItem = new();
 
+    private static string MakeBaseTitle()
+    => $"Gottesdienst_{DateTime.Now:dd-MM-yyyy}";
+
+
+
     private static string MakeKey(LanguageCode lang, int book, int chapter, int fromVerse, int? toVerse)
     {
         var to = toVerse ?? fromVerse;
@@ -281,7 +291,70 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (!string.IsNullOrWhiteSpace(ProjectId))
+        {
+            await LoadProjectFromDbAsync(ProjectId);
+            return;
+        }
+
         await ReloadBooksAsync();
+    }
+
+    private async Task LoadProjectFromDbAsync(string projectId)
+    {
+        try
+        {
+            // 1) Projekt aus IndexedDB holen
+            var project = await JS.InvokeAsync<MedvProjectRecord>("medvProjectDb.get", projectId);
+            if (project is null)
+            {
+                Snackbar.Add("Projekt nicht gefunden.", Severity.Error);
+                await ReloadBooksAsync();
+                return;
+            }
+
+            // 2) Payload (base64) -> bytes -> MedvPresProject
+            var bytes = Convert.FromBase64String(project.Payload);
+
+            // ⚠️ Annahme: Du hast eine From-Methode im Serializer.
+            // Wenn sie anders heißt, einfach anpassen.
+            var loaded = MedvPresSerializer.FromMedvPresBytes(bytes);
+
+            if (loaded is null)
+            {
+                Snackbar.Add("Projekt konnte nicht geladen werden (ungültiges Format).", Severity.Error);
+                await ReloadBooksAsync();
+                return;
+            }
+
+            // 3) Sprache setzen + Bücher neu laden (damit Book-Mapping stimmt)
+            SelectedLanguage = ParseLang(loaded.Language);
+            await ReloadBooksAsync();
+
+            // 4) Items setzen
+            SelectedItems = loaded.Slides?.ToList() ?? new List<MedvSlideItem>();
+
+            // 5) Duplikat-Keys neu aufbauen (damit AddSelectedVerseOrRangeAsync korrekt bleibt)
+            RebuildVerseKeysFromSelectedItems();
+
+            Snackbar.Add($"Projekt geladen: {loaded.Title}", Severity.Success);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Fehler beim Laden: {ex.Message}", Severity.Error);
+            await ReloadBooksAsync();
+        }
+    }
+
+    private static LanguageCode ParseLang(string? lang)
+    {
+        return (lang ?? "").Trim().ToLower() switch
+        {
+            "fr" => LanguageCode.Fr,
+            "de" => LanguageCode.De,
+            _ => LanguageCode.De
+        };
     }
 
     private async Task OnLanguageChanged(LanguageCode value)
@@ -543,6 +616,102 @@
         
     }
 
+    private async Task<string> GetNextFreeTitleAsync(string userTitle)
+    {
+        var baseTitle = NormalizeBaseTitle(userTitle);
+
+        var titles = await JS.InvokeAsync<string[]>("medvDb.getAllTitles");
+        if (titles is null || titles.Length == 0)
+            return baseTitle;
+
+        var baseExists = false;
+        var maxSuffix = 1;
+        var prefix = baseTitle + " (";
+
+        foreach (var t in titles)
+        {
+            if (string.IsNullOrWhiteSpace(t))
+                continue;
+
+            if (t.Equals(baseTitle, StringComparison.OrdinalIgnoreCase))
+            {
+                baseExists = true;
+                continue;
+            }
+
+            if (!t.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) || !t.EndsWith(")", StringComparison.Ordinal))
+                continue;
+
+            var numberPart = t.Substring(prefix.Length, t.Length - prefix.Length - 1);
+            if (int.TryParse(numberPart, out var n) && n > maxSuffix)
+                maxSuffix = n;
+        }
+
+        return baseExists ? $"{baseTitle} ({maxSuffix + 1})" : baseTitle;
+    }
+
+    private static string NormalizeBaseTitle(string title)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+            return "Präsentation";
+
+        title = title.Trim();
+
+        // Entfernt vorhandene "(n)" am Ende
+        var idx = title.LastIndexOf(" (", StringComparison.Ordinal);
+        if (idx > 0 && title.EndsWith(")", StringComparison.Ordinal))
+        {
+            var suffix = title.Substring(idx + 2, title.Length - idx - 3);
+            if (int.TryParse(suffix, out _))
+                title = title.Substring(0, idx);
+        }
+
+        return title;
+    }
+
+    private void RebuildVerseKeysFromSelectedItems()
+    {
+        _verseKeys.Clear();
+        _keyByItem.Clear();
+
+        // Map: Buchname -> BookId (case-insensitive)
+        var bookMap = Books
+            .GroupBy(b => b.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase);
+
+        // Display Format bei dir:
+        // Single: "Genesis 1:1"
+        // Range:  "Genesis 1:1-3"
+        var rx = new System.Text.RegularExpressions.Regex(@"\s(\d+):(\d+)(?:-(\d+))?$");
+
+        foreach (var item in SelectedItems)
+        {
+            if (item.Type != "verse") continue;
+            if (string.IsNullOrWhiteSpace(item.Display)) continue;
+
+            var m = rx.Match(item.Display);
+            if (!m.Success) continue;
+
+            var bookName = item.Display[..m.Index].Trim();
+
+            if (!bookMap.TryGetValue(bookName, out var bookId))
+            {
+                // Buchname nicht gefunden -> Key nicht rekonstruierbar
+                continue;
+            }
+
+            var chapter = int.Parse(m.Groups[1].Value);
+            var from = int.Parse(m.Groups[2].Value);
+            var to = m.Groups[3].Success ? int.Parse(m.Groups[3].Value) : from;
+
+            var key = MakeKey(SelectedLanguage, bookId, chapter, from, to);
+
+            _verseKeys.Add(key);
+            _keyByItem[item] = key;
+        }
+    }
+
+
 
     private async Task<bool> SaveProjectFileAsync()
     {
@@ -563,13 +732,33 @@
             var fileName = $"{title}.medvpres";
             var ok = await SaveBackupAsync(fileName, bytes);
 
+            var id = Guid.NewGuid();
+
+            var dbProject = new
+            {
+                id = id.ToString(),
+                title = title,
+                createdAt = DateTime.Now,
+                language = SelectedLanguage.ToString(),
+                slideCount = SelectedItems.Count,
+                sizeKb = bytes.Length / 1024,
+                payload = Convert.ToBase64String(bytes)
+            };
+
+            await JS.InvokeVoidAsync("medvProjectDb.save", dbProject);
+
+
             if (!ok)
                 return false;
 
             Snackbar.Add(
                 $"Präsentation erstellt und gespeichert ({fileName})",
+
                 Severity.Success
             );
+
+            Snackbar.Add("Präsentation zur Bibliothek hinzugefügt", Severity.Info);
+
 
             return true;
         }
@@ -616,6 +805,17 @@
             Snackbar.Add($"Fehler beim Backup-Speichern: {ex.Message}", Severity.Error);
             return false;
         }
+    }
+
+    public class MedvProjectRecord
+    {
+        public string Id { get; set; } = "";
+        public string Title { get; set; } = "";
+        public DateTime CreatedAt { get; set; }
+        public string Language { get; set; } = "";
+        public int SlideCount { get; set; }
+        public int SizeKb { get; set; }
+        public string Payload { get; set; } = ""; // base64
     }
 
 
