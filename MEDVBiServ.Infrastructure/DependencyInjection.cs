@@ -36,11 +36,14 @@ namespace MEDVBiServ.Infrastructure
             services.AddDbContext<FRDbContext>(options =>
                 options.UseSqlite(csFr));
 
+            services.AddDbContext<NotificationsDbContext>(options =>
+                options.UseSqlite(configuration.GetConnectionString("Notifications")));
+
             // -----------------------------
             // Repositories
             // -----------------------------
             services.AddScoped<IBibleVerseRepository, BibleRepository>();
-
+            services.AddScoped<INotificationRepository, NotificationRepository>();
             return services;
         }
     }

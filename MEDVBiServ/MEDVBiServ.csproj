@@ -32,4 +32,8 @@
     <ProjectReference Include="..\MEDVBiServ.Contracts\MEDVBiServ.Contracts.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Databases\Notifications\" />
+  </ItemGroup>
+
 </Project>
