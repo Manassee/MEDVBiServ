@@ -1,6 +1,6 @@
 ﻿using MEDVBiServ.Application.Services;
-using MEDVBiServ.Infrastructure;
 using System.Text.Json.Serialization;
+using MEDVBiServ.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 

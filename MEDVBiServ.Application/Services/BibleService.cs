@@ -5,7 +5,6 @@ using MEDVBiServ.Application.Mapper;
 using MEDVBiServ.Contracts.Dtos;
 using MEDVBiServ.Contracts.Enums;
 using MEDVBiServ.Contracts.Requests;
-using MEDVBiServ.Infrastructure.Interfaces;
 
 namespace MEDVBiServ.Application.Services
 {

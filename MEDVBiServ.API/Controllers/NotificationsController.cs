@@ -1,7 +1,5 @@
 ﻿using MEDVBiServ.Application.Dtos;
 using MEDVBiServ.Application.Interfaces;
-using MEDVBiServ.Application.Dtos;
-using MEDVBiServ.Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MEDVBiServ.API.Controllers;

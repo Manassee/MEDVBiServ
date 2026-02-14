@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using MEDVBiServ.Domain.Entities;
 
-namespace MEDVBiServ.Infrastructure.Interfaces
+namespace MEDVBiServ.Application.Interfaces
 {
     public interface IBibleVerseRepository
     {

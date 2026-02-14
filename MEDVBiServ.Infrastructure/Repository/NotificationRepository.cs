@@ -1,6 +1,6 @@
-﻿using MEDVBiServ.Domain.Entities;
+﻿using MEDVBiServ.Application.Interfaces;
+using MEDVBiServ.Domain.Entities;
 using MEDVBiServ.Infrastructure.DbContext;
-using MEDVBiServ.Infrastructure.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
