@@ -7,5 +7,9 @@ public sealed class NotificationMessage
     public string Author { get; set; } = "System";
     public string Text { get; set; } = string.Empty;
 
-    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    // nur noch als "Anzeige"
+    public DateTimeOffset CreatedAt { get; set; }
+
+    // ✅ SQLite-sicher zum Sortieren
+    public long CreatedAtUnixMs { get; set; }
 }

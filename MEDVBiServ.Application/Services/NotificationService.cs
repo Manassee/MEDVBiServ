@@ -44,12 +44,15 @@ namespace MEDVBiServ.Application.Services
             if (text.Length > 1000)
                 throw new ArgumentException("Text darf max. 1000 Zeichen haben.");
 
+            var now = DateTimeOffset.UtcNow;
+
             var entity = new NotificationMessage
             {
                 Id = Guid.NewGuid(),
                 Author = author.Length > 60 ? author[..60] : author,
                 Text = text,
-                CreatedAt = DateTimeOffset.UtcNow
+                CreatedAt = now,
+                CreatedAtUnixMs = now.ToUnixTimeMilliseconds()
             };
 
             await _repo.AddAsync(entity, ct);

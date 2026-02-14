@@ -21,11 +21,11 @@ namespace MEDVBiServ.Infrastructure.Repository
 
         public async Task<IReadOnlyList<NotificationMessage>> GetLatestAsync(int take, CancellationToken ct = default)
         {
-            return await _db.Notifications
-                .AsNoTracking()
-                .OrderByDescending(x => x.CreatedAt)
-                .Take(take)
-                .ToListAsync(ct);
+                    return await _db.Notifications
+                        .AsNoTracking()
+                        .OrderByDescending(x => x.CreatedAtUnixMs)
+                        .Take(take)
+                        .ToListAsync(ct);
         }
 
         public async Task AddAsync(NotificationMessage message, CancellationToken ct = default)

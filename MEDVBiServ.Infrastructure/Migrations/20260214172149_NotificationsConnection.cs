@@ -3,10 +3,10 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace MEDVBiServ.Infrastructure.Persistence.Migrations
+namespace MEDVBiServ.Infrastructure.Migrations
 {
     /// <inheritdoc />
-    public partial class InitNotifications : Migration
+    public partial class NotificationsConnection : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -18,7 +18,8 @@ namespace MEDVBiServ.Infrastructure.Persistence.Migrations
                     Id = table.Column<Guid>(type: "TEXT", nullable: false),
                     Author = table.Column<string>(type: "TEXT", maxLength: 60, nullable: false),
                     Text = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: false),
-                    CreatedAt = table.Column<DateTimeOffset>(type: "TEXT", nullable: false)
+                    CreatedAt = table.Column<DateTimeOffset>(type: "TEXT", nullable: false),
+                    CreatedAtUnixMs = table.Column<long>(type: "INTEGER", nullable: false)
                 },
                 constraints: table =>
                 {
