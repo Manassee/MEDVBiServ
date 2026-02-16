@@ -27,7 +27,7 @@ namespace MEDVBiServ
             builder.Services.AddScoped(sp => new HttpClient
             {
                 //BaseAddress = new Uri(builder.HostEnvironment.BaseAddress)
-                BaseAddress = new Uri("http://localhost:5294/") // API-Base-URL
+                BaseAddress = new Uri("https://localhost:7272/") // API-Base-URL
             });
 
 

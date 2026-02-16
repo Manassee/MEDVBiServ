@@ -15,6 +15,7 @@ public sealed class BibleApiClient : IBibleApiClient
     public BibleApiClient(HttpClient http)
     {
         _http = http;
+        Console.WriteLine($"BibleApiClient BaseAddress: {_http.BaseAddress}");
     }
 
     public Task<List<BookInfos>> GetBooksAsync(LanguageCode translation)
