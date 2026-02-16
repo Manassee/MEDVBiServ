@@ -14,8 +14,8 @@
                 <MudText Typo="Typo.h6">Presenter</MudText>
 
                 <div class="d-flex" style="gap:6px;">
-                    <MudIconButton Icon="@Icons.Material.Filled.Tv" OnClick="OpenBeamer" Title="Beamer öffnen" />
-                    <MudIconButton Icon="@Icons.Material.Filled.Fullscreen" OnClick="ToggleFullscreen" Title="Fullscreen" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Tv" OnClick="OpenBeamer" Title="Beamer öffnen" Class="light-icon-btn" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Fullscreen" OnClick="ToggleFullscreen" Title="Fullscreen" Class="light-icon-btn" />
                 </div>
             </div>
 
@@ -40,10 +40,15 @@
                     var slide = Slides[i];
                     var active = i == SafeIndex;
 
-                    <MudPaper @key="i"
+                    // ✅ wichtig: lokalen Index erzeugen (Closure-Fix)
+                    var index = i;
+
+                    <MudPaper @key="index"
                               Class="@GetThumbClass(active)"
                               Elevation="0"
-                              @onclick="@(() => GoTo(i))">
+                              tabindex="0"
+                              role="button"
+                              @onclick="async () => await GoTo(index)">
                         <MudText Typo="Typo.subtitle2">@slide.Display</MudText>
 
                         @if (!string.IsNullOrWhiteSpace(slide.Text))
@@ -111,12 +116,7 @@
                     }
                 </div>
 
-                <div class="card notes">
-                    <div class="card-title">Notizen (optional)</div>
-                    <MudText Typo="Typo.body2" Color="Color.Secondary">
-                        (Später: Notizen pro Slide aus .medvpres)
-                    </MudText>
-                </div>
+               
             </div>
         }
     </main>
@@ -213,29 +213,58 @@
     private async Task ToggleFullscreen()
         => await JS.InvokeVoidAsync("medvPresenter.toggleFullscreen");
 
-    private async Task Next()
+
+
+
+    private async Task TrySendStateAsync()
     {
-        if (Slides.Count == 0) return;
-        if (CurrentIndex < Slides.Count - 1) CurrentIndex++;
-        await SendStateAsync();
-        StateHasChanged();
+        try
+        {
+            await SendStateAsync();
+        }
+        catch (JSException)
+        {
+            // JS bridge ist (noch) nicht bereit oder Funktion fehlt -> UI soll trotzdem reagieren
+        }
+        catch (InvalidOperationException)
+        {
+            // z.B. wenn Renderer disposed o.ä. (selten) -> ignorieren
+        }
     }
 
-    private async Task Prev()
+    private Task Next()
     {
-        if (Slides.Count == 0) return;
-        if (CurrentIndex > 0) CurrentIndex--;
-        await SendStateAsync();
-        StateHasChanged();
+        if (Slides.Count == 0) return Task.CompletedTask;
+
+        if (CurrentIndex < Slides.Count - 1)
+            CurrentIndex++;
+
+        StateHasChanged();              // ✅ sofort UI updaten
+        return TrySendStateAsync();     // ✅ JS danach, aber safe
     }
 
-    private async Task GoTo(int index)
+    private Task Prev()
     {
-        if (Slides.Count == 0) return;
+        if (Slides.Count == 0) return Task.CompletedTask;
+
+        if (CurrentIndex > 0)
+            CurrentIndex--;
+
+        StateHasChanged();
+        return TrySendStateAsync();
+    }
+
+    private Task GoTo(int index)
+    {
+        if (Slides.Count == 0) return Task.CompletedTask;
+
         CurrentIndex = Math.Clamp(index, 0, Slides.Count - 1);
-        await SendStateAsync();
+
         StateHasChanged();
+        return TrySendStateAsync();
     }
+
+  
 
     private async Task OnKeyDown(KeyboardEventArgs e)
     {
@@ -291,5 +320,38 @@
           .present-grid{grid-template-columns:1fr;grid-template-rows:auto auto auto;}
           .card.notes{grid-column:auto;}
         }
+
+        /* ---------- Helle Icon Buttons ---------- */
+.light-icon-btn{
+    background: rgba(255,255,255,0.18) !important;
+    border: 1px solid rgba(255,255,255,0.25) !important;
+    border-radius: 10px;
+    color: #ffffff !important;
+}
+.light-icon-btn:hover{
+    background: rgba(255,255,255,0.28) !important;
+}
+
+/* ---------- Helle Standard Buttons ---------- */
+.light-btn{
+    background: rgba(255,255,255,0.20) !important;
+    border: 1px solid rgba(255,255,255,0.30) !important;
+    color: #ffffff !important;
+    font-weight: 600;
+}
+.light-btn:hover{
+    background: rgba(255,255,255,0.30) !important;
+}
+
+/* ---------- Heller Primary Button ---------- */
+.light-btn-primary{
+    background: #ffffff !important;
+    color: #0f1115 !important;
+    font-weight: 800;
+    border: 1px solid #ffffff !important;
+}
+.light-btn-primary:hover{
+    background: #f0f0f0 !important;
+}
     
     </style>
