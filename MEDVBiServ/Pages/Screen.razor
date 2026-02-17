@@ -128,23 +128,31 @@
 
 <style>
    
-    .screen-root{
-  height:100vh;
-  width:100vw;
-  background:#000;
-  color:#fff;
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  text-align:center;
-  padding: 6vh 6vw;
-}
+    .screen-root {
+        height: 100vh;
+        width: 100vw;
+        background: #fff; /* ✅ weiß */
+        color: #000; /* ✅ schwarz */
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        /*padding: 2vh 2vw;*/
+    }
+
+    .screen-title {
+        color: #000; /* ✅ sicherstellen */
+    }
+
+    .screen-text {
+        color: #000; /* ✅ sicherstellen */
+    }
 
 /* ✅ entscheidend: Höhe begrenzen + overflow verstecken */
 .screen-content{
   width: 100%;
   max-width: 95vw;
-  max-height: 88vh;     
+  max-height: 95vh;     
   overflow: hidden;     
   display:flex;
   flex-direction:column;
