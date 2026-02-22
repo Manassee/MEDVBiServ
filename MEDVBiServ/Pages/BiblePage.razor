@@ -1,0 +1,569 @@
+﻿@page "/database"
+
+@using MEDVBiServ.Contracts.Enums
+@using MEDVBiServ.Contracts.Dtos
+@using MEDVBiServ.Interfaces
+@using MEDVBiServ.Models
+@inject IBibleApiClient bibleService
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+
+<MudContainer MaxWidth="MaxWidth.False" Class="mt-6 px-6">
+
+    <MudPaper Elevation="2" Class="pa-4 mb-4">
+        <div class="d-flex align-center justify-space-between flex-wrap" style="gap:12px;">
+            <div>
+                <MudText Typo="Typo.h4">📖 Bibel</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    Komplettes Kapitel lesen – Vers(e) markieren und schnell zwischen Kapiteln wechseln.
+                </MudText>
+            </div>
+
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Elevation="2" Class="pa-4" Style="height: 420px;">
+
+                    <MudText Typo="Typo.h5">Sprache & Eingabe</MudText>
+
+                    <MudText Class="mt-6">Sprache auswählen</MudText>
+                    <MudSelect T="LanguageCode"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               Value="SelectedLanguage"
+                               ValueChanged="OnLanguageChanged">
+                        <MudSelectItem Value="LanguageCode.De">Deutsch</MudSelectItem>
+                        <MudSelectItem Value="LanguageCode.Fr">Français</MudSelectItem>
+                    </MudSelect>
+
+                    <MudText Class="mt-6">Buch</MudText>
+                    <MudSelect T="BookInfos"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               Value="SelectedBook"
+                               ValueChanged="OnBookChanged"
+                               ToStringFunc="@(b => b?.Name ?? string.Empty)">
+                        @foreach (var b in Books)
+                        {
+                            <MudSelectItem Value="b" @key="b.Id">@b.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudPaper>
+
+
+                <MudText Class="mt-6">Kapitel</MudText>
+                <MudSelect T="int?"
+                           Variant="Variant.Outlined"
+                           Dense="true"
+                           Value="SelectedChapter"
+                           ValueChanged="OnChapterChanged"
+                           Disabled="@(SelectedBook is null)">
+                    @foreach (var c in Chapters)
+                    {
+                        <MudSelectItem Value="@((int?)c)" @key="c">@c</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <div class="mt-4" style="display:flex; gap:12px;">
+                    <MudSelect T="int?"
+                               Label="Von"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               Style="flex:1;"
+                               Value="SelectedVerseFrom"
+                               ValueChanged="OnVerseFromChanged"
+                               Disabled="@(SelectedBook is null || !SelectedChapter.HasValue)">
+                        @foreach (var v in VerseNumbers)
+                        {
+                            <MudSelectItem Value="@((int?)v)" @key="v">@v</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    <MudSelect T="int?"
+                               Label="Bis (optional)"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               Style="flex:1;"
+                               Value="SelectedVerseTo"
+                               ValueChanged="OnVerseToChanged"
+                               Disabled="@(SelectedBook is null || !SelectedChapter.HasValue)">
+                        @foreach (var v in VerseNumbers)
+                        {
+                            <MudSelectItem Value="@((int?)v)" @key="v">@v</MudSelectItem>
+                        }
+                    </MudSelect>
+                </div>
+
+                <MudDivider Class="my-4" />
+
+                <div class="d-flex" style="gap:10px;">
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Primary"
+                               Disabled="@(!CanPrevChapter)"
+                               OnClick="PrevChapterAsync"
+                               StartIcon="@Icons.Material.Filled.ArrowBack"
+                               Style="flex:1;">
+                        Kapitel zurück
+                    </MudButton>
+
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Disabled="@(!CanNextChapter)"
+                               OnClick="NextChapterAsync"
+                               EndIcon="@Icons.Material.Filled.ArrowForward"
+                               Style="flex:1;">
+                        Kapitel weiter
+                    </MudButton>
+                </div>
+
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-3">
+                    Tipp: Klicke rechts auf einen Vers → Highlight springt direkt dahin.
+                </MudText>
+
+            </MudItem>
+            
+
+
+            
+
+            </div>
+        </MudPaper>
+
+        <MudGrid Spacing="3">
+    <MudItem xs="12">
+        <MudPaper Elevation="2" Class="pa-4 reader-card">
+
+            <div class="d-flex align-center justify-space-between flex-wrap" style="gap:12px;">
+                <div>
+                    <MudText Typo="Typo.h5">@ReaderTitle</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@ReaderSubtitle</MudText>
+                </div>
+
+                @if (IsLoading)
+                {
+                    <MudProgressCircular Indeterminate="true" Size="Size.Medium" />
+                }
+                else if (HasHighlight)
+                {
+                    <MudChip T="string" Variant="Variant.Filled" Color="Color.Info" Class="chip">
+                        Markiert: @HighlightLabel
+                    </MudChip>
+                }
+            </div>
+
+            <MudDivider Class="my-3" />
+
+            @if (ChapterVerses.Count == 0 && !IsLoading)
+            {
+                <MudText Typo="Typo.body1" Color="Color.Secondary">
+                    Wähle links Buch und Kapitel.
+                </MudText>
+            }
+            else
+            {
+                <div class="reader-scroll" id="chapterReader">
+                    @foreach (var v in ChapterVerses)
+                    {
+                        var isSelected = IsVerseHighlighted(v.Verse);
+
+                        <div id="@GetVerseDomId(v.Verse)"
+                             class="verse-row @(isSelected ? "hl" : "")"
+                             @onclick="() => OnVerseClicked(v.Verse)">
+
+                            <div class="verse-no">@v.Verse</div>
+                            <div class="verse-text">@v.Text</div>
+                        </div>
+                    }
+                </div>
+            }
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+</MudContainer>
+
+@code {
+
+    private LanguageCode SelectedLanguage = LanguageCode.De;
+
+
+    private List<MedvSlideItem> SelectedItems = new();
+
+    private List<BookInfos> Books = new();
+    private BookInfos? SelectedBook;
+
+    private List<int> Chapters = new();
+    private int? SelectedChapter;
+
+    private List<int> VerseNumbers = new();
+    private int? SelectedVerseFrom;
+    private int? SelectedVerseTo;
+
+    private bool CanAddVerse =>
+        SelectedBook is not null &&
+        SelectedChapter.HasValue &&
+        SelectedVerseFrom.HasValue;
+
+    // Duplikate verhindern (Key: lang|book|chapter|from-to)
+    private readonly HashSet<string> _verseKeys = new();
+    private readonly Dictionary<MedvSlideItem, string> _keyByItem = new();
+
+    private static string MakeKey(LanguageCode lang, int book, int chapter, int fromVerse, int? toVerse)
+    {
+        var to = toVerse ?? fromVerse;
+        if (to < fromVerse) (fromVerse, to) = (to, fromVerse);
+        return $"{lang}|{book}|{chapter}|{fromVerse}-{to}";
+    }
+
+
+    public class VerseLine
+    {
+        public int Verse { get; set; }
+        public string Text { get; set; } = "";
+    }
+
+    private string NewAnnotation = string.Empty;
+
+
+
+    private bool IsLoading;
+
+    // komplettes Kapitel (aus deinem API)
+    private List<VerseLine> ChapterVerses = new();
+
+    private bool HasHighlight => SelectedVerseFrom.HasValue;
+
+    private string ReaderTitle =>
+        SelectedBook is null ? "Kapitel" : SelectedBook.Name;
+
+    private string ReaderSubtitle =>
+        SelectedBook is null || !SelectedChapter.HasValue
+            ? "—"
+            : $"Kapitel {SelectedChapter} · {ChapterVerses.Count} Verse";
+
+    private string HighlightLabel
+    {
+        get
+        {
+            if (!SelectedVerseFrom.HasValue) return "—";
+            var from = SelectedVerseFrom.Value;
+            var to = SelectedVerseTo ?? from;
+            if (to < from) (from, to) = (to, from);
+            return from == to ? $"{from}" : $"{from}-{to}";
+        }
+    }
+
+    private bool CanPrevChapter =>
+        SelectedBook is not null && SelectedChapter.HasValue && Chapters.IndexOf(SelectedChapter.Value) > 0;
+
+    private bool CanNextChapter =>
+        SelectedBook is not null && SelectedChapter.HasValue && Chapters.IndexOf(SelectedChapter.Value) < Chapters.Count - 1;
+
+    //====================================== Methoden =====================================================//
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadBooksAsync();
+    }
+
+
+
+    private static LanguageCode ParseLang(string? lang)
+    {
+        return (lang ?? "").Trim().ToLower() switch
+        {
+            "fr" => LanguageCode.Fr,
+            "de" => LanguageCode.De,
+            _ => LanguageCode.De
+        };
+    }
+
+    private async Task OnLanguageChanged(LanguageCode value)
+    {
+        SelectedLanguage = value;
+        await ReloadBooksAsync();
+    }
+
+    private async Task OnBookChanged(BookInfos? value)
+    {
+        SelectedBook = value;
+
+        ChapterVerses.Clear(); // neu
+        await ReloadChaptersAsync();
+    }
+
+    private async Task OnChapterChanged(int? value)
+    {
+        SelectedChapter = value;
+        await ReloadVerseNumbersAsync();
+    }
+
+    private void OnVerseFromChanged(int? value)
+    {
+        SelectedVerseFrom = value;
+
+        // Optional: wenn "To" leer ist, direkt auf "From" setzen (fühlt sich in der UI gut an)
+        if (SelectedVerseFrom.HasValue && !SelectedVerseTo.HasValue)
+            SelectedVerseTo = SelectedVerseFrom;
+    }
+
+    private async Task ReloadBooksAsync()
+    {
+        try
+        {
+            Books = await bibleService.GetBooksAsync(SelectedLanguage);
+
+            SelectedBook = null;
+            SelectedChapter = null;
+            SelectedVerseFrom = null;
+            SelectedVerseTo = null;
+
+            Chapters.Clear();
+            VerseNumbers.Clear();
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Fehler beim Laden der Bücher: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ReloadChaptersAsync()
+    {
+        Chapters.Clear();
+        VerseNumbers.Clear();
+
+        SelectedChapter = null;
+        SelectedVerseFrom = null;
+        SelectedVerseTo = null;
+
+        if (SelectedBook is null) return;
+
+        try
+        {
+            Chapters = await bibleService.GetChaptersAsync(SelectedLanguage, SelectedBook.Id);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Fehler beim Laden der Kapitel: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ReloadVerseNumbersAsync()
+    {
+        VerseNumbers.Clear();
+
+        SelectedVerseFrom = null;
+        SelectedVerseTo = null;
+
+        if (SelectedBook is null || !SelectedChapter.HasValue) return;
+
+        try
+        {
+            var verses = await bibleService.GetVersesFromChapterAsync(SelectedLanguage, SelectedBook.Id, SelectedChapter.Value);
+            VerseNumbers = verses.Select(v => v.Verse).Distinct().OrderBy(v => v).ToList();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Fehler beim Laden der Verse: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void SaveAnnotation()
+    {
+        if (string.IsNullOrWhiteSpace(NewAnnotation)) return;
+
+        var item = new MedvSlideItem
+        {
+            Type = "annotation",
+            Display = NewAnnotation.Trim(),
+            Text = string.Empty
+        };
+
+        SelectedItems.Add(item);
+        NewAnnotation = string.Empty;
+
+        StateHasChanged();
+    }
+
+    private async Task LoadFullChapterAsync()
+    {
+        if (SelectedBook is null || !SelectedChapter.HasValue)
+            return;
+
+        IsLoading = true;
+        ChapterVerses.Clear();
+        StateHasChanged();
+
+        try
+        {
+            // Du hast diese Methode schon genutzt:
+            var verses = await bibleService.GetVersesFromChapterAsync(
+                SelectedLanguage, SelectedBook.Id, SelectedChapter.Value);
+
+            // Wir übernehmen Verse + Text für die Anzeige
+            ChapterVerses = verses
+                .OrderBy(v => v.Verse)
+                .Select(v => new VerseLine { Verse = v.Verse, Text = v.Text })
+                .ToList();
+
+            VerseNumbers = ChapterVerses.Select(v => v.Verse).ToList();
+
+            // Default: erster Vers highlighten
+            if (VerseNumbers.Count > 0)
+            {
+                SelectedVerseFrom = VerseNumbers[0];
+                SelectedVerseTo = SelectedVerseFrom;
+                await ScrollToHighlightAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Fehler beim Laden des Kapitels: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OnVerseToChanged(int? value)
+    {
+        SelectedVerseTo = value;
+
+        if (SelectedVerseFrom.HasValue && !SelectedVerseTo.HasValue)
+            SelectedVerseTo = SelectedVerseFrom;
+
+        _ = ScrollToHighlightAsync();
+    }
+
+    private void OnVerseClicked(int verseNumber)
+    {
+        SelectedVerseFrom = verseNumber;
+        SelectedVerseTo = verseNumber;
+
+        _ = ScrollToHighlightAsync();
+        StateHasChanged();
+    }
+
+    private bool IsVerseHighlighted(int verseNumber)
+    {
+        if (!SelectedVerseFrom.HasValue) return false;
+
+        var from = SelectedVerseFrom.Value;
+        var to = SelectedVerseTo ?? from;
+        if (to < from) (from, to) = (to, from);
+
+        return verseNumber >= from && verseNumber <= to;
+    }
+
+    private string GetVerseDomId(int verse) => $"v-{SelectedBook?.Id}-{SelectedChapter}-{verse}";
+
+    private async Task ScrollToHighlightAsync()
+    {
+        if (SelectedBook is null || !SelectedChapter.HasValue || !SelectedVerseFrom.HasValue)
+            return;
+
+        var id = GetVerseDomId(SelectedVerseFrom.Value);
+
+        try
+        {
+            await Task.Delay(30); // UI render safety
+            await JS.InvokeVoidAsync("medvScroll.toId", id);
+        }
+        catch
+        {
+            // kein harter fail nötig
+        }
+    }
+
+    private async Task PrevChapterAsync()
+    {
+        if (!CanPrevChapter) return;
+
+        var idx = Chapters.IndexOf(SelectedChapter!.Value);
+        SelectedChapter = Chapters[idx - 1];
+
+        SelectedVerseFrom = null;
+        SelectedVerseTo = null;
+
+        await LoadFullChapterAsync();
+    }
+
+    private async Task NextChapterAsync()
+    {
+        if (!CanNextChapter) return;
+
+        var idx = Chapters.IndexOf(SelectedChapter!.Value);
+        SelectedChapter = Chapters[idx + 1];
+
+        SelectedVerseFrom = null;
+        SelectedVerseTo = null;
+
+        await LoadFullChapterAsync();
+    }
+
+
+
+}
+
+
+<style>
+    .reader-card {
+        height: 560px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .reader-scroll {
+        flex: 1;
+        overflow-y: auto;
+        padding-right: 6px;
+    }
+
+    .verse-row {
+        display: flex;
+        gap: 12px;
+        padding: 12px 12px;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: transform 0.05s ease, background 0.2s ease;
+        margin-bottom: 10px;
+        background: rgba(0,0,0,0.02);
+    }
+
+        .verse-row:hover {
+            background: rgba(0,0,0,0.04);
+            transform: translateY(-1px);
+        }
+
+    .verse-no {
+        min-width: 40px;
+        height: 32px;
+        border-radius: 999px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        background: rgba(0,0,0,0.06);
+    }
+
+    .verse-text {
+        font-size: 1.12rem;
+        line-height: 1.85;
+        letter-spacing: 0.2px;
+        flex: 1;
+    }
+
+    .verse-row.hl {
+        background: rgba(33, 150, 243, 0.12);
+        outline: 2px solid rgba(33, 150, 243, 0.25);
+    }
+
+    .chip {
+        border-radius: 999px;
+        font-weight: 600;
+    }
+</style>

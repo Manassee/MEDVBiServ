@@ -1,4 +1,6 @@
 ﻿@page "/screen"
+
+@using MEDVBiServ.Models
 @layout PresentationLayout
 @inject IJSRuntime JS
 
@@ -10,11 +12,13 @@
     else
     {
         var s = Slides[SafeIndex];
-        <div class="screen-content">
-            <div class="screen-title">@s.Display</div>
+
+        <div class="screen-content" id="fitBox">
+            <div class="screen-title" id="fitTitle">@s.Display</div>
+
             @if (!string.IsNullOrWhiteSpace(s.Text))
             {
-                <div class="screen-text">@s.Text</div>
+                <div class="screen-text" id="fitText">@s.Text</div>
             }
         </div>
     }
@@ -49,6 +53,9 @@
         await JS.InvokeVoidAsync("medvPresenter.requestState");
 
         StateHasChanged();
+
+        await Task.Delay(50);
+        await FitAsync();
     }
 
     private async Task<List<SlideItem>> LoadSlidesFromLocalStorageAsync()
@@ -74,7 +81,13 @@
 
         CurrentIndex = state.currentIndex;
 
-        InvokeAsync(StateHasChanged);
+        _ = InvokeAsync(async () =>
+        {
+            StateHasChanged();
+            await Task.Delay(20);
+            await FitAsync();
+        });
+
         return Task.CompletedTask;
     }
 
@@ -91,36 +104,72 @@
     {
         _dotNetRef?.Dispose();
     }
+
+    private async Task FitAsync()
+    {
+        if (Slides.Count == 0) return;
+
+        try
+        {
+            await JS.InvokeVoidAsync("medvPresenterFit.fit", "fitBox", "fitTitle", "fitText", new
+            {
+                titleMin = 42,
+                titleMax = 140,
+                textMin = 54,
+                textMax = 180
+            });
+        }
+        catch (JSException)
+        {
+            // JS nicht geladen/ready -> dann bleiben clamp-Größen aktiv
+        }
+    }
 }
 
 <style>
+   
     .screen-root {
         height: 100vh;
         width: 100vw;
-        background: #0b0d12;
-        color: white;
+        background: #fff; /* ✅ weiß */
+        color: #000; /* ✅ schwarz */
         display: flex;
         justify-content: center;
         align-items: center;
         text-align: center;
-        padding: 48px;
+        /*padding: 2vh 2vw;*/
     }
 
-    .screen-content {
-        max-width: 1200px;
+    .screen-title {
+        color: #000; /* ✅ sicherstellen */
     }
 
-    .title {
-        font-size: clamp(2.2rem, 4vw, 4.6rem);
+    .screen-text {
+        color: #000; /* ✅ sicherstellen */
+    }
+
+/* ✅ entscheidend: Höhe begrenzen + overflow verstecken */
+.screen-content{
+  width: 100%;
+  max-width: 95vw;
+  max-height: 95vh;     
+  overflow: hidden;     
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+}
+
+    .screen-title {
+        font-size: clamp(3rem, 6vw, 7rem);
         font-weight: 900;
-        margin-bottom: 20px;
         line-height: 1.1;
+        margin-bottom: 3vh;
     }
 
-    .text {
-        font-size: clamp(1.5rem, 2.4vw, 2.7rem);
-        line-height: 1.45;
+    .screen-text {
+        font-size: clamp(2.5rem, 5vw, 6rem);
+        line-height: 1.4;
         white-space: pre-wrap;
-        opacity: 0.96;
+        font-weight: 700;
     }
 </style>

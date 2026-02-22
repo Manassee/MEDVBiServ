@@ -1,0 +1,201 @@
+﻿@page "/listView"
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<MudContainer MaxWidth="MaxWidth.False" Class="mt-6">
+
+    <div class="d-flex align-center justify-space-between">
+        <MudText Typo="Typo.h4">📚 Predigt-Liste</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@Reload">
+            Aktualisieren
+        </MudButton>
+    </div>
+
+    <MudPaper Class="pa-3 mt-4" Elevation="2">
+
+        <MudTable Items="_items"
+                  Dense="true"
+                  Hover="true"
+                  Bordered="true"
+                  Striped="true"
+                  @bind-SelectedItem="_selected"
+                  @bind-SelectedItem:after="OnSelectedAfter">
+
+            <HeaderContent>
+                <MudTh>Titel</MudTh>
+                <MudTh>Datum</MudTh>
+                <MudTh>Sprache</MudTh>
+                <MudTh>Folien</MudTh>
+                <MudTh>Größe</MudTh>
+            </HeaderContent>
+
+            <RowTemplate>
+                <MudTd DataLabel="Titel">@context.Title</MudTd>
+                <MudTd DataLabel="Datum">@context.CreatedAt.ToString("dd.MM.yyyy HH:mm")</MudTd>
+                <MudTd DataLabel="Sprache">@context.Language</MudTd>
+                <MudTd DataLabel="Folien">@context.SlideCount</MudTd>
+                <MudTd DataLabel="Größe">@($"{context.SizeKb} KB")</MudTd>
+            </RowTemplate>
+
+        </MudTable>
+
+    </MudPaper>
+
+    @if (_selected is not null)
+    {
+        <MudPaper Class="pa-4 mt-4" Elevation="2">
+            <div class="d-flex align-center justify-space-between">
+                <div>
+                    <MudText Typo="Typo.h6">@_selected.Title</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        @_selected.CreatedAt.ToString("dd.MM.yyyy HH:mm") · @_selected.SlideCount Folien · @_selected.SizeKb KB
+                    </MudText>
+                </div>
+
+                <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="@ClearSelection">
+                    Auswahl schließen
+                </MudButton>
+            </div>
+
+            <MudDivider Class="my-3" />
+
+            <div class="d-flex flex-wrap" style="gap:10px;">
+                <!-- Bearbeiten -->
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Edit"
+                           OnClick="@EditSelected">
+                    Bearbeiten
+                </MudButton>
+
+                <!-- Anzeigen -->
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Info"
+                           StartIcon="@Icons.Material.Filled.PlayArrow"
+                           OnClick="@ShowSelected">
+                    Anzeigen
+                </MudButton>
+
+                <!-- Löschen -->
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Error"
+                           StartIcon="@Icons.Material.Filled.Delete"
+                           OnClick="@DeleteSelected">
+                    Löschen
+                </MudButton>
+
+                <!-- Export (Menü) -->
+                <MudMenu Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Download">
+                    <MudMenuItem OnClick="@(() => ExportSelected("medvpres"))">
+                        Export: .medvpres
+                    </MudMenuItem>
+
+                    <MudMenuItem Disabled="true">
+                        Export: PPTX (kommt)
+                    </MudMenuItem>
+
+                    <MudMenuItem Disabled="true">
+                        Export: PDF (kommt)
+                    </MudMenuItem>
+                </MudMenu>
+            </div>
+        </MudPaper>
+    }
+
+</MudContainer>
+
+@code {
+
+    // ✅ Stark typisiert statt dynamic
+    private List<MedvProjectRow> _items = new();
+    private MedvProjectRow? _selected;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Reload();
+    }
+
+    private async Task Reload()
+    {
+        try
+        {
+            var rows = await JS.InvokeAsync<List<MedvProjectRow>>("medvProjectDb.list");
+            _items = rows
+                .OrderByDescending(x => x.CreatedAt)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Fehler beim Laden: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void OnSelectedAfter()
+    {
+        
+        StateHasChanged();
+    }
+
+    private void ClearSelection() => _selected = null;
+
+    private void EditSelected()
+    {
+        if (_selected is null) return;
+        Nav.NavigateTo($"/CreatePage?projectId={_selected.Id}");
+    }
+
+    private void ShowSelected()
+    {
+        if (_selected is null) return;
+        Nav.NavigateTo($"/presenter?projectId={_selected.Id}");
+    }
+
+    private async Task DeleteSelected()
+    {
+        if (_selected is null) return;
+
+        // Optional: Confirm Dialog später (MudDialog)
+        await JS.InvokeVoidAsync("medvProjectDb.remove", _selected.Id);
+        Snackbar.Add("Präsentation gelöscht", Severity.Warning);
+
+        _selected = null;
+        await Reload();
+    }
+
+    private async Task ExportSelected(string type)
+    {
+        if (_selected is null) return;
+
+        // Hol komplettes Projekt (inkl payload)
+        var project = await JS.InvokeAsync<MedvProjectRecord>("medvProjectDb.get", _selected.Id);
+        if (project is null)
+        {
+            Snackbar.Add("Projekt nicht gefunden.", Severity.Error);
+            return;
+        }
+
+        // Für jetzt: .medvpres Download
+        if (type == "medvpres")
+        {
+            await JS.InvokeVoidAsync("medvFiles.downloadBase64", $"{project.Title}.medvpres", project.Payload);
+            Snackbar.Add("Export gestartet (.medvpres)", Severity.Success);
+        }
+    }
+
+    // Models
+    public class MedvProjectRow
+    {
+        public string Id { get; set; } = "";
+        public string Title { get; set; } = "";
+        public DateTime CreatedAt { get; set; }
+        public string Language { get; set; } = "";
+        public int SlideCount { get; set; }
+        public int SizeKb { get; set; }
+    }
+
+    public class MedvProjectRecord : MedvProjectRow
+    {
+        public string Payload { get; set; } = ""; // base64
+    }
+}

@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+﻿<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
@@ -6,6 +6,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ServiceWorkerAssetsManifest>service-worker-assets.js</ServiceWorkerAssetsManifest>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="Databases\Notifications\**" />
+    <Content Remove="Databases\Notifications\**" />
+    <EmbeddedResource Remove="Databases\Notifications\**" />
+    <None Remove="Databases\Notifications\**" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="8.0.18" />
@@ -29,11 +36,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Models\" />
+    <ProjectReference Include="..\MEDVBiServ.Contracts\MEDVBiServ.Contracts.csproj" />
+	
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\MEDVBiServ.Contracts\MEDVBiServ.Contracts.csproj" />
+    <Folder Include="Controllers\" />
   </ItemGroup>
 
 </Project>

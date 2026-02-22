@@ -16,6 +16,9 @@ namespace MEDVBiServ.Application.Services
             services.AddScoped<IBibleService, BibleService>();
             services.AddScoped<ILanguageProvider, LanguageProvider>();
 
+            services.AddScoped<INotificationService, NotificationService>();
+           // services.AddScoped<INotificationRepository, NotificationService>();
+
             return services;
         }
     }

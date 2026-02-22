@@ -1,12 +1,15 @@
 ﻿@page "/"
 
 @using System.Text.Json
-@using System.Globalization;
-
+@using System.Globalization
+@using System.Net.Http.Json
 @inject IJSRuntime JS
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
 @layout MainLayout
 
-@inject NavigationManager NavigationManager
+@implements IDisposable
 
 <MudContainer MaxWidth="MaxWidth.False" Class="mt-10 px-8">
 
@@ -64,100 +67,342 @@
                     </MudPaper>
                 </MudItem>
 
+                <!-- ✅ ERSETZT: Zuletzt erstellt -->
                 <MudItem xs="12" sm="6" md="6">
                     <MudPaper Elevation="2" Class="pa-4 kpi-card">
-                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                            <MudIcon Icon="@Icons.Material.Filled.History" Size="Size.Large" Color="Color.Success" />
-                            <div>
-                                <MudText Typo="Typo.caption" Class="text-muted">Zuletzt erstellt</MudText>
-                                <MudText Typo="Typo.h6" Class="fw-700">@LastCreatedText</MudText>
-                            </div>
+                        <MudStack Row="true" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween">
+
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Notifications" Size="Size.Large" Color="@(_unreadCount > 0 ? Color.Warning : Color.Success)" />
+                                <div>
+                                    <MudText Typo="Typo.caption" Class="text-muted">Neueste Nachricht</MudText>
+
+                                    @if (_latest is null)
+                                    {
+                                        <MudText Typo="Typo.h6" Class="fw-700">—</MudText>
+                                        <MudText Typo="Typo.caption" Class="text-muted">Keine Notifications</MudText>
+                                    }
+                                    else
+                                    {
+                                        <MudText Typo="Typo.h6" Class="fw-700">
+                                            @Trunc(_latest.Text, 42)
+                                        </MudText>
+                                        <MudText Typo="Typo.caption" Class="text-muted">
+                                            @(_latest.Author) • @_latest.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm", _de)
+                                        </MudText>
+                                    }
+                                </div>
+                            </MudStack>
+
+                            <!-- 🔔 Badge + Aktionen -->
+                            <MudStack AlignItems="AlignItems.End" Spacing="1">
+                                <MudBadge Content="@_unreadCount"
+                                          Visible="@(_unreadCount > 0)"
+                                          Overlap="true"
+                                          Origin="Origin.TopRight">
+                                    <MudIconButton Icon="@Icons.Material.Filled.NotificationsActive"
+                                                   Color="@(_unreadCount > 0 ? Color.Warning : Color.Default)"
+                                                   OnClick="OpenNotifications"
+                                                   Title="Notifications öffnen" />
+                                </MudBadge>
+
+                                <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                    <MudIconButton Icon="@Icons.Material.Filled.DoneAll"
+                                                   Color="Color.Default"
+                                                   Disabled="@(_latestServerCreatedAt is null)"
+                                                   OnClick="MarkAllAsRead"
+                                                   Title="Alles als gelesen markieren" />
+
+                                    <MudIconButton Icon="@Icons.Material.Filled.NotificationsNone"
+                                                   Color="Color.Default"
+                                                   OnClick="RequestBrowserNotifications"
+                                                   Title="Browser-Benachrichtigungen aktivieren" />
+                                </MudStack>
+                            </MudStack>
                         </MudStack>
                     </MudPaper>
                 </MudItem>
 
             </MudGrid>
-
-
         </MudGrid>
     </MudPaper>
 </MudContainer>
 
-
-@code {
-
-    
-
+@code
+{
+    // ---------------------
+    // Slides KPI (dein Teil)
+    // ---------------------
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
     private readonly CultureInfo _de = new("de-DE");
-    private string NowText => _now.ToString("dddd, dd.MM.yyyy • HH:mm:ss", _de);
 
-    private System.Timers.Timer? _timer;
+    private System.Timers.Timer? _clock;
     private DateTime _now = DateTime.Now;
-   
 
-    // Dashboard-Daten (aus localStorage)
+    private DotNetObjectReference<MEDVBiServ.Pages.HomePage>? _dotNetRef;
+    private bool _storageListenerRegistered;
+
     private List<SlideItem> LastItems = new();
     private DateTime? LastCreatedAt;
 
+    private string NowText => _now.ToString("dddd, dd.MM.yyyy • HH:mm:ss", _de);
     private int SelectedCount => LastItems.Count;
-    private int AnnotationCount => LastItems.Count(x => x.Type == "annotation");
+    private int AnnotationCount => LastItems.Count(x => string.Equals(x.Type, "annotation", StringComparison.OrdinalIgnoreCase));
 
-    private string LastCreatedText =>
-        LastCreatedAt is null
-            ? (LastItems.Count == 0 ? "—" : "Zeitstempel fehlt")
-            : LastCreatedAt.Value.ToString("dd.MM.yyyy • HH:mm");
+    // ---------------------
+    // Notifications KPI
+    // ---------------------
+    private const string ApiGetNotifications = "api/notifications?take=50";
+    private const string StorageLastReadUtc = "medv_notifications_lastReadUtc";
+    private const string StorageLastSeenServerId = "medv_notifications_lastSeenServerId";
+
+    private readonly SemaphoreSlim _pollLock = new(1, 1);
+    private PeriodicTimer? _pollTimer;
+    private CancellationTokenSource? _pollCts;
+
+    private NotificationDto? _latest;
+    private DateTime? _latestServerCreatedAt;
+    private int _unreadCount;
 
     protected override async Task OnInitializedAsync()
     {
         StartClock();
+        NavigationManager.LocationChanged += OnLocationChanged;
+
         await ReloadFromLocalStorage();
+
+        // initial: lastRead laden
+        await LoadUnreadStateFromStorage();
+
+        // initial fetch
+        await PollNotificationsOnce();
+
+        // Background poll (leicht, performant)
+        _pollCts = new CancellationTokenSource();
+        _ = RunPollLoop(_pollCts.Token);
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        _dotNetRef = DotNetObjectReference.Create(this);
+        await RegisterStorageListenerOnce();
+
+        // optional: JS init (nicht kritisch)
+        try { await JS.InvokeVoidAsync("medvNotify.init"); } catch { }
+    }
+
+    // ---------------------
+    // Poll loop
+    // ---------------------
+    private async Task RunPollLoop(CancellationToken ct)
+    {
+        _pollTimer = new PeriodicTimer(TimeSpan.FromSeconds(8));
+
+        try
+        {
+            while (await _pollTimer.WaitForNextTickAsync(ct))
+            {
+                await PollNotificationsOnce(ct);
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private async Task PollNotificationsOnce(CancellationToken ct = default)
+    {
+        if (!await _pollLock.WaitAsync(0, ct))
+            return;
+
+        try
+        {
+            List<NotificationDto>? server;
+            try
+            {
+                server = await Http.GetFromJsonAsync<List<NotificationDto>>(ApiGetNotifications, _jsonOptions, ct);
+            }
+            catch
+            {
+                // API down/offline → nicht spammen
+                return;
+            }
+
+            if (server is null || server.Count == 0)
+            {
+                _latest = null;
+                _latestServerCreatedAt = null;
+                _unreadCount = 0;
+                await InvokeAsync(StateHasChanged);
+                return;
+            }
+
+            // API sollte "neueste zuerst" liefern, aber wir sichern ab:
+            var newest = server.OrderByDescending(x => x.CreatedAt).First();
+            _latest = newest;
+            _latestServerCreatedAt = newest.CreatedAt;
+
+            // Unread zählen
+            var lastReadUtc = await GetLastReadUtc();
+            _unreadCount = server.Count(x => x.CreatedAt.ToUniversalTime() > lastReadUtc);
+
+            // "Neue Nachricht" erkennen (für Hinweis)
+            var lastSeenId = await JS.InvokeAsync<string>("localStorage.getItem", StorageLastSeenServerId);
+            if (!string.Equals(lastSeenId, newest.Id, StringComparison.OrdinalIgnoreCase))
+            {
+                await JS.InvokeVoidAsync("localStorage.setItem", StorageLastSeenServerId, newest.Id);
+
+                // nur melden, wenn nicht die erste Initial-Ladung
+                if (!string.IsNullOrWhiteSpace(lastSeenId))
+                {
+                    Snackbar.Add($"Neue Nachricht von {newest.Author}: {Trunc(newest.Text, 60)}", Severity.Info);
+
+                    // optional Browser Notification
+                    try
+                    {
+                        await JS.InvokeVoidAsync("medvNotify.notify", "Neue Nachricht", $"{newest.Author}: {Trunc(newest.Text, 80)}");
+                    }
+                    catch { /* Permission fehlt o.ä. */ }
+                }
+            }
+
+            await InvokeAsync(StateHasChanged);
+        }
+        finally
+        {
+            _pollLock.Release();
+        }
+    }
+
+    private async Task LoadUnreadStateFromStorage()
+    {
+        // Wenn noch nie gelesen: lastRead = jetzt (damit nicht sofort 50 ungelesen)
+        var raw = await JS.InvokeAsync<string>("localStorage.getItem", StorageLastReadUtc);
+        if (string.IsNullOrWhiteSpace(raw))
+            await SetLastReadUtc(DateTime.UtcNow);
+    }
+
+    private async Task<DateTime> GetLastReadUtc()
+    {
+        var raw = await JS.InvokeAsync<string>("localStorage.getItem", StorageLastReadUtc);
+        if (DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt))
+            return dt.Kind == DateTimeKind.Utc ? dt : dt.ToUniversalTime();
+
+        return DateTime.UtcNow;
+    }
+
+    private async Task SetLastReadUtc(DateTime utc)
+    {
+        var iso = utc.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
+        await JS.InvokeVoidAsync("localStorage.setItem", StorageLastReadUtc, iso);
+    }
+
+    private async Task MarkAllAsRead()
+    {
+        await SetLastReadUtc(DateTime.UtcNow);
+        _unreadCount = 0;
+        await InvokeAsync(StateHasChanged);
+        Snackbar.Add("Alle Notifications als gelesen markiert.", Severity.Success);
+    }
+
+    private void OpenNotifications()
+    {
+        // Option: beim Öffnen direkt als gelesen markieren
+        _ = MarkAllAsRead();
+        NavigationManager.NavigateTo("/notifications");
+    }
+
+    private async Task RequestBrowserNotifications()
+    {
+        try
+        {
+            var ok = await JS.InvokeAsync<bool>("medvNotify.requestPermission");
+            Snackbar.Add(ok ? "Browser-Benachrichtigungen aktiviert." : "Benachrichtigungen nicht erlaubt.", ok ? Severity.Success : Severity.Warning);
+        }
+        catch
+        {
+            Snackbar.Add("Browser-Benachrichtigungen werden nicht unterstützt.", Severity.Warning);
+        }
+    }
+
+    private static string Trunc(string? s, int max)
+    {
+        if (string.IsNullOrWhiteSpace(s)) return "—";
+        s = s.Trim();
+        return s.Length <= max ? s : s[..max] + "…";
+    }
+
+    // ---------------------
+    // Dein Clock + Storage Listener
+    // ---------------------
     private void StartClock()
     {
-        _timer = new System.Timers.Timer(1000);
-        _timer.Elapsed += (_, __) =>
+        _clock = new System.Timers.Timer(1000);
+        _clock.Elapsed += (_, __) =>
         {
             _now = DateTime.Now;
             InvokeAsync(StateHasChanged);
         };
-        _timer.AutoReset = true;
-        _timer.Start();
+        _clock.AutoReset = true;
+        _clock.Start();
+    }
+
+    private async void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        await ReloadFromLocalStorage();
     }
 
     private async Task ReloadFromLocalStorage()
     {
-        // slides
-        var slidesJson = await JS.InvokeAsync<string>("localStorage.getItem", "slides");
-        if (!string.IsNullOrWhiteSpace(slidesJson))
-        {
-            try
-            {
-                LastItems = JsonSerializer.Deserialize<List<SlideItem>>(slidesJson, _jsonOptions) ?? new();
-            }
-            catch
-            {
-                LastItems = new();
-            }
-        }
-        else
-        {
-            LastItems = new();
-        }
-
-        // createdAt (optional)
-        var createdAt = await JS.InvokeAsync<string>("localStorage.getItem", "slidesCreatedAt");
-        if (!string.IsNullOrWhiteSpace(createdAt) && DateTime.TryParse(createdAt, out var dt))
-            LastCreatedAt = dt;
-        else
-            LastCreatedAt = null;
-
-        StateHasChanged();
+        LastItems = await ReadSlidesFromStorage();
+        LastCreatedAt = await ReadCreatedAtFromStorage();
+        await InvokeAsync(StateHasChanged);
     }
 
-    private static string Shorten(string text, int max)
-        => string.IsNullOrWhiteSpace(text) ? "" : (text.Length <= max ? text : text.Substring(0, max) + "…");
+    private async Task<List<SlideItem>> ReadSlidesFromStorage()
+    {
+        var slidesJson = await JS.InvokeAsync<string>("localStorage.getItem", "slides");
+        if (string.IsNullOrWhiteSpace(slidesJson))
+            return new();
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<SlideItem>>(slidesJson, _jsonOptions) ?? new();
+        }
+        catch
+        {
+            return new();
+        }
+    }
+
+    private async Task<DateTime?> ReadCreatedAtFromStorage()
+    {
+        var createdAt = await JS.InvokeAsync<string>("localStorage.getItem", "slidesCreatedAt");
+        if (string.IsNullOrWhiteSpace(createdAt))
+            return null;
+
+        if (DateTime.TryParse(createdAt, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var isoDt))
+            return isoDt;
+
+        if (DateTime.TryParse(createdAt, _de, DateTimeStyles.None, out var deDt))
+            return deDt;
+
+        return null;
+    }
+
+    [JSInvokable]
+    public async Task OnStorageChanged()
+    {
+        await ReloadFromLocalStorage();
+    }
+
+    private async Task RegisterStorageListenerOnce()
+    {
+        if (_storageListenerRegistered) return;
+        _storageListenerRegistered = true;
+
+        await JS.InvokeVoidAsync("medvStorage.register", _dotNetRef);
+    }
 
     public class SlideItem
     {
@@ -166,10 +411,31 @@
         public string Text { get; set; } = string.Empty;
     }
 
+    public sealed class NotificationDto
+    {
+        public string Id { get; set; } = "";
+        public string Author { get; set; } = "";
+        public string Text { get; set; } = "";
+        public DateTime CreatedAt { get; set; }
+    }
+
     public void Dispose()
     {
-        _timer?.Stop();
-        _timer?.Dispose();
+        NavigationManager.LocationChanged -= OnLocationChanged;
+
+        _clock?.Stop();
+        _clock?.Dispose();
+
+        try
+        {
+            _pollCts?.Cancel();
+            _pollCts?.Dispose();
+            _pollTimer?.Dispose();
+        }
+        catch { }
+
+        _dotNetRef?.Dispose();
+        _pollLock.Dispose();
     }
 }
 
@@ -190,5 +456,3 @@
         border-radius: 16px;
     }
 </style>
-
-}
