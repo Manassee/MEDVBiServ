@@ -3,6 +3,22 @@ using System.Text.RegularExpressions;
 
 namespace MEDVBiServ.Application.Mapper
 {
+    /// <summary>
+    /// Stellt Mapping- und Nachschlagefunktionen für die Bücher der Bibel gemäß der Elberfelder Übersetzung bereit.
+    /// Unterstützt Buchcodes, Buchnamen, Alias-Bezeichnungen sowie die Zuordnung zum jeweiligen Testament.
+    /// </summary>
+    /// <remarks>
+    /// Diese Klasse bietet statische Methoden zur Auflösung von Buch-IDs, Codes und Namen sowie zur
+    /// Normalisierung von Benutzereingaben (z. B. gebräuchliche Abkürzungen oder alternative Bezeichnungen)
+    /// in kanonische Buch-IDs.
+    ///
+    /// Sie dient dazu, biblische Referenzen innerhalb von Anwendungen zu parsen und zu vereinheitlichen,
+    /// die die Buchbenennung der Elberfelder Übersetzung verwenden.
+    ///
+    /// Alle Member sind thread-sicher und können parallel verwendet werden.
+    /// </remarks>
+
+
     public static class ElberfelderMap
     {
         public sealed record BookDef(int Id, string Code, string Name, Testament T, string[] Aliases);

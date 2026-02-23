@@ -1,1 +1,21 @@
-﻿
+﻿@page "/appointments"
+
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+<MudContainer MaxWidth="MaxWidth.False" Class="mt-6 px-6 pb-10">
+
+    <!-- Header -->
+    <MudPaper Elevation="2" Class="pa-5 mb-4 d-flex align-center justify-space-between flex-wrap" Style="gap:12px;">
+        <div>
+            <MudText Typo="Typo.h4" Class="fw-800">📅 Termine</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                Termine anlegen, bearbeiten und verwalten. Abgelaufene Termine werden automatisch entfernt.
+            </MudText>
+        </div>
+
+       
+    </MudPaper>
+</MudContainer>
